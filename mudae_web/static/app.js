@@ -343,7 +343,7 @@ elBtnToggleRaw.addEventListener("click", () => {
 });
 
 function syncVisualToPresetObject(target) {
-  if (elCfgToken.value.trim()) target.token = elCfgToken.value.trim();
+  if (elCfgToken.value.trim()) target.token = elCfgToken.value.trim().replace(/^["']|["']$/g, '');
   target.channel_id = elCfgChannelId.value.trim();
   target.command_channel_id = elCfgCmdChannelId.value.trim();
   target.roll_command = elCfgRollCommand.value.trim() || "wa";

@@ -1153,7 +1153,7 @@ def run_bot(preset_name, preset_data, log_function=print_log):
         def print_log(message, name=preset_name, log_type="INFO"):
             BotLogger.log(message, name, log_type)
 
-    token = preset_data.get("token")
+    token = str(preset_data.get("token") or "").strip().strip('"\'')
     prefix = preset_data.get("prefix", "/////////////")
     target_channel_id = preset_data.get("channel_id")
     roll_command = preset_data.get("roll_command", "wa")
@@ -8760,6 +8760,8 @@ def bot_lifecycle_wrapper(preset_name, preset_data):
     }
     normalized.update(preset_data)
     preset_data = normalized
+    if "token" in preset_data and isinstance(preset_data["token"], str):
+        preset_data["token"] = preset_data["token"].strip().strip('"\'')
     validation_errors = validate_preset(preset_data, resolved_token=preset_data.get("token"))
     if validation_errors:
         print_log("Preset validation failed: " + " | ".join(validation_errors), preset_name, "ERROR")

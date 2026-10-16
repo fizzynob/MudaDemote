@@ -1728,7 +1728,7 @@ def prepare_active_presets(preset_names, preset_mapping, start_index=0):
         tokens = []
         seen_tokens = set()
         for token in configured_tokens:
-            cleaned = str(token or "").strip()
+            cleaned = str(token or "").strip().strip('"\'')
             if cleaned and cleaned not in seen_tokens:
                 seen_tokens.add(cleaned)
                 tokens.append(cleaned)

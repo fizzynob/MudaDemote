@@ -80,6 +80,13 @@ class SecretStoreTests(unittest.TestCase):
                 self.assertEqual(store.get_token("MULTI"), "first")
                 self.assertEqual(store.get_tokens("LEGACY"), ["single"])
 
+    def test_token_strips_surrounding_quotes(self):
+        with tempfile.TemporaryDirectory() as project_directory:
+            store = SecretStore(project_directory)
+            self.assertEqual(store._decode_tokens('"my-token"'), ["my-token"])
+            self.assertEqual(store._decode_tokens("'single-quoted'"), ["single-quoted"])
+            self.assertEqual(store._decode_tokens('  "spaced-token"  '), ["spaced-token"])
+
 
 if __name__ == "__main__":
     unittest.main()

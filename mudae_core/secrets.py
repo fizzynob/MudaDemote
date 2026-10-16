@@ -65,7 +65,7 @@ class SecretStore:
                 candidates = [text]
         result = []
         for candidate in candidates:
-            token = str(candidate or "").strip()
+            token = str(candidate or "").strip().strip('"\'')
             if token and token not in result:
                 result.append(token)
         return result

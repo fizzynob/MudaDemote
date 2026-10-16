@@ -844,20 +844,37 @@ function initWebSocket() {
     }, 20000);
   };
 
+function formatConsoleEvent(type, data) {
+  if (!data) return { text: "", level: (type || "info").toLowerCase() };
+  if (typeof data === "string") return { text: data, level: (type || "info").toLowerCase() };
+  if (data.message) {
+    const lvl = (data.level || type || "info").toLowerCase();
+    return { text: data.message, level: lvl };
+  }
+  return { text: JSON.stringify(data), level: (type || "info").toLowerCase() };
+}
+
   ws.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data);
+      if (msg.type === "pong") {
+        return; // Silent WebSocket heartbeat keepalive
+      }
       if (msg.type === "init") {
         applyServerStatus(msg.status);
         if (msg.recent_events) {
           msg.recent_events.forEach(ev => {
-            appendConsoleLog(ev.type, JSON.stringify(ev.data), new Date(ev.timestamp).toLocaleTimeString().toLowerCase());
+            const formatted = formatConsoleEvent(ev.type, ev.data);
+            const ts = ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString().toLowerCase() : undefined;
+            appendConsoleLog(formatted.level, formatted.text, ts);
           });
         }
       } else if (msg.type === "status") {
         applyServerStatus(msg.data);
       } else {
-        appendConsoleLog(msg.type, JSON.stringify(msg.data), new Date(msg.timestamp).toLocaleTimeString().toLowerCase());
+        const formatted = formatConsoleEvent(msg.type, msg.data);
+        const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString().toLowerCase() : undefined;
+        appendConsoleLog(formatted.level, formatted.text, ts);
       }
     } catch (e) {
       console.error(e);

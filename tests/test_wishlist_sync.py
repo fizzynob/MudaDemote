@@ -50,3 +50,35 @@ def test_wishlist_sync_integration():
     assert removed is True
     assert "Rem" not in client.wishlist
     assert "Asuka" in client.wishlist
+
+
+def test_roll_messages_and_embeds_ignored_by_wishlist_sync():
+    client = SimpleNamespace(wishlist=["Asuka"])
+    saved_patches = []
+
+    def mock_save(patch):
+        saved_patches.append(patch)
+
+    preset = {"auto_wishlist_sync_enabled": True, "wishlist_remove_claimed": True}
+    sync = WishlistSync(client, preset, save_func=mock_save)
+
+    # 1. Roll announcement should be completely ignored
+    roll_msg = "<@123> **Rem** is on your wishlist!"
+    assert sync.on_wishlist_response(roll_msg) == []
+    assert client.wishlist == ["Asuka"]
+
+    # 2. Standard character roll embed should be completely ignored
+    roll_embed = SimpleNamespace(
+        title="Rem",
+        author=SimpleNamespace(name="Re:Zero kara Hajimeru Isekai Seikatsu"),
+        description="150 <:kakera:469835869059153940>\nClaim Rank: #12\nLike Rank: #35",
+        fields=[],
+    )
+    assert sync.on_wishlist_response("", [roll_embed]) == []
+    assert client.wishlist == ["Asuka"]
+
+    # 3. Disabled sync should ignore everything
+    disabled_sync = WishlistSync(client, {"auto_wishlist_sync_enabled": False})
+    wish_msg = "User's wishlist:\n• **Rem** - Re:Zero\n• **Megumin** - KonoSuba"
+    assert disabled_sync.on_wishlist_response(wish_msg) == []
+    assert len(saved_patches) == 0

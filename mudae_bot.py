@@ -8008,12 +8008,13 @@ def run_bot(preset_name, preset_data, log_function=print_log):
         capture_tu_response(message)
         client.sphere_runtime.capture_sphere_game_response(message)
         client.sphere_runtime.capture_sphere_game_bonus(message)
-        if getattr(client, "badge_automation", None):
-            client.badge_automation.on_badge_message(message.content or "")
-        if getattr(client, "tower_automation", None):
-            client.tower_automation.on_tower_message(message.content or "")
-        if getattr(client, "wishlist_sync", None):
-            client.wishlist_sync.on_wishlist_response(message.content or "", getattr(message, "embeds", None))
+        if message.author.id == TARGET_BOT_ID:
+            if getattr(client, "badge_automation", None):
+                client.badge_automation.on_badge_message(message.content or "")
+            if getattr(client, "tower_automation", None):
+                client.tower_automation.on_tower_message(message.content or "")
+            if getattr(client, "wishlist_sync", None):
+                client.wishlist_sync.on_wishlist_response(message.content or "", getattr(message, "embeds", None))
         is_roll = (message.channel.id == client.target_channel_id)
         is_snipe = (client.snipe_mode and message.channel.id in client.snipe_channels)
         is_kakera_snipe_channel = (

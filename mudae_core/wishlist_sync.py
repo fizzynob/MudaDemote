@@ -3,6 +3,17 @@
 import re
 from typing import List, Set
 
+WISHLIST_KEYWORDS = ("wishlist", "liste de souhaits", "lista de deseos", "liste des souhaits")
+
+ROLL_WISH_MARKERS = (
+    "is on your wishlist",
+    "is on <@",
+    "est dans votre liste",
+    "est dans la liste de",
+    "está en tu lista",
+    "está en la lista de",
+)
+
 
 def clean_character_name(raw_line: str) -> str:
     """Clean a single line from a Mudae wishlist into an exact character name."""
@@ -24,12 +35,55 @@ def clean_character_name(raw_line: str) -> str:
     return line
 
 
+def is_wishlist_response(text: str = "", embeds: list = None, client_user=None) -> bool:
+    """Determine if a Discord message from Mudae is a genuine $wl / $wll wishlist listing."""
+    lower_text = (text or "").lower()
+
+    # Roll announcements like "<@user> Rem is on your wishlist!" must NEVER be treated as a wishlist listing
+    if any(marker in lower_text for marker in ROLL_WISH_MARKERS):
+        return False
+
+    # Check embeds
+    for emb in (embeds or []):
+        author_name = str(getattr(getattr(emb, "author", None), "name", "") or "").lower()
+        title = str(getattr(emb, "title", "") or "").lower()
+        description = str(getattr(emb, "description", "") or "").lower()
+
+        if any(marker in description for marker in ROLL_WISH_MARKERS):
+            return False
+
+        if any(kw in author_name for kw in WISHLIST_KEYWORDS) or any(kw in title for kw in WISHLIST_KEYWORDS):
+            return True
+
+    # Check text message format (plain text $wll format)
+    if any(kw in lower_text for kw in WISHLIST_KEYWORDS):
+        return True
+
+    # Check if multiple lines have bullet list formatting typical of $wll
+    combined = text or ""
+    for emb in (embeds or []):
+        if getattr(emb, "description", None):
+            combined += "\n" + emb.description
+    lines = [line.strip() for line in combined.splitlines() if line.strip()]
+    bullet_lines = [l for l in lines if l.startswith("•") or re.match(r"^\d+\.\s+", l)]
+    if len(bullet_lines) >= 2:
+        return True
+
+    return False
+
+
 def parse_wishlist_text(text: str, embeds: list = None) -> List[str]:
     """Parse character names from Mudae's $wl or $wll responses."""
     characters: Set[str] = set()
 
     sources = [text or ""]
+    has_wishlist_context = any(kw in (text or "").lower() for kw in WISHLIST_KEYWORDS)
+
     for emb in (embeds or []):
+        author_name = str(getattr(getattr(emb, "author", None), "name", "") or "").lower()
+        title = str(getattr(emb, "title", "") or "").lower()
+        if any(kw in author_name for kw in WISHLIST_KEYWORDS) or any(kw in title for kw in WISHLIST_KEYWORDS):
+            has_wishlist_context = True
         if hasattr(emb, "description") and emb.description:
             sources.append(emb.description)
         for field in getattr(emb, "fields", ()) or ():
@@ -44,8 +98,22 @@ def parse_wishlist_text(text: str, embeds: list = None) -> List[str]:
         # Skip header lines, page counters, footer notes
         if re.search(r"\b(?:wishlist|page \d+|characters?|total|keys?)\b", line, re.IGNORECASE) and "/" in line:
             continue
+        # Skip roll announcements
+        if any(marker in line.lower() for marker in ROLL_WISH_MARKERS):
+            continue
+
+        is_bullet_item = bool(re.match(r"^[\s•\-\*\u2605\u2B50]|\d+\.", line))
+        if not is_bullet_item and not has_wishlist_context:
+            continue
+
+        # Ignore obvious metadata lines
+        if not is_bullet_item and re.search(r"\b(?:rank|kakera|claims?|likes?|badge|keys?)\b", line, re.IGNORECASE):
+            continue
+
         cleaned = clean_character_name(line)
         if cleaned and len(cleaned) >= 2 and not cleaned.isdigit():
+            if cleaned.lower() in ("claim rank:", "like rank:", "kakera", "claim rank", "like rank"):
+                continue
             characters.add(cleaned)
 
     return sorted(list(characters))
@@ -73,10 +141,21 @@ class WishlistSync:
 
     def on_wishlist_response(self, text: str, embeds: list = None) -> List[str]:
         """Consume $wl or $wll response to update client's wishlist."""
+        # Only process if auto-sync is enabled or sync was explicitly requested
+        if not self.enabled and not self.pending_sync:
+            return []
+
+        # Ensure message is actually a Mudae wishlist response, not a roll or chat
+        if not is_wishlist_response(text, embeds, getattr(self.client, "user", None)):
+            return []
+
         parsed = parse_wishlist_text(text, embeds)
         if parsed:
-            # Merge or overwrite client wishlist
             current = set(getattr(self.client, "wishlist", []))
+            new_characters = set(parsed) - current
+            if not new_characters and not self.pending_sync:
+                return list(current)
+
             updated = sorted(list(current.union(parsed)))
             self.client.wishlist = updated
             self.pending_sync = False

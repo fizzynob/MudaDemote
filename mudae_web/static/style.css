@@ -439,6 +439,8 @@ body.theme-offwhite {
   word-break: break-all;
 }
 .log-line.system { color: var(--term-cyan); }
+.log-line.info { color: var(--term-text); }
+.log-line.reset { color: var(--term-cyan); font-weight: 500; }
 .log-line.claim { color: var(--term-pink); font-weight: 600; }
 .log-line.kakera { color: var(--term-yellow); }
 .log-line.roll { color: var(--term-text); }

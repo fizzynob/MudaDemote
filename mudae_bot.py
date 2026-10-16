@@ -3115,6 +3115,19 @@ def run_bot(preset_name, preset_data, log_function=print_log):
         except Exception:
             target_ch_id = None
 
+        # Check if the user entered a Discord Guild / Server ID into the channel ID field
+        if target_ch_id:
+            guild_match = client.get_guild(target_ch_id)
+            if guild_match is not None:
+                BotLogger.log(
+                    f"Notice: Configured ID {target_ch_id} is Discord server '{guild_match.name}'. "
+                    f"Treating as target server and auto-discovering roll channel...",
+                    preset_name,
+                    "INFO"
+                )
+                client.target_guild_id = str(guild_match.id)
+                target_ch_id = None  # Reset so auto-discovery runs inside this target server
+
         # Check server_configs and target_guild_id overrides
         if getattr(client, "target_guild_id", None):
             if not is_guild_allowed(client.target_guild_id, client.allowed_guild_ids):
@@ -3165,7 +3178,31 @@ def run_bot(preset_name, preset_data, log_function=print_log):
         if not target_ch_id:
             BotLogger.log(f"Err: Invalid channel ID format or no channel discovered: {target_channel_id}", preset_name, "ERROR"); await client.close(); return
 
-        channel = client.get_channel(target_ch_id) or await client.fetch_channel(target_ch_id)
+        channel = client.get_channel(target_ch_id)
+        if not channel:
+            try:
+                channel = await client.fetch_channel(target_ch_id)
+            except Exception:
+                channel = None
+
+        if not channel or not isinstance(channel, (discord.TextChannel, discord.Thread, discord.VoiceChannel)):
+            BotLogger.log(f"Warn: Target channel {target_ch_id} not available or not text-like. Trying auto-discovery fallback...", preset_name, "WARN")
+            guilds = ServerDiscovery.list_accessible_guilds(client, client.allowed_guild_ids)
+            allowed_guilds = [g for g in guilds if g.get("allowed", True)]
+            target_guild = None
+            if getattr(client, "target_guild_id", None):
+                target_guild = next((g for g in allowed_guilds if str(g["id"]) == str(client.target_guild_id)), None)
+            if not target_guild:
+                target_guild = next((g for g in allowed_guilds if g.get("mudae_present")), allowed_guilds[0] if allowed_guilds else None)
+            if target_guild:
+                scan = ServerDiscovery.inspect_guild_channels(client, int(target_guild["id"]))
+                if scan.get("recommended_roll_channel"):
+                    target_ch_id = int(scan["recommended_roll_channel"]["id"])
+                    client.target_channel_id = target_ch_id
+                    client.target_guild_id = str(target_guild["id"])
+                    channel = client.get_channel(target_ch_id)
+                    BotLogger.log(f"Auto-Discovery fallback: Selected #{scan['recommended_roll_channel']['name']} ({target_ch_id}) in '{scan['guild_name']}'", preset_name, "INFO")
+
         if not channel or not isinstance(channel, (discord.TextChannel, discord.Thread, discord.VoiceChannel)):
             BotLogger.log(f"Err: Target channel {target_ch_id} not available or not text-like", preset_name, "ERROR"); await client.close(); return
 

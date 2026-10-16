@@ -114,6 +114,18 @@ async def test_server_status_and_presets_api(test_context):
         assert scfg_data["server_config"]["channel_id"] == "789"
         assert scfg_data["server_config"]["mudae_prefix"] == ">"
 
+        # Test dynamic bot_client resolution from runtime_manager
+        test_context.bot_client = None
+        mock_instance = SimpleNamespace(
+            get_client=lambda: (SimpleNamespace(is_ready=lambda: True, user="ResolvedUser"), None)
+        )
+        test_context.runtime_manager = SimpleNamespace(
+            _instances={"inst-1": mock_instance},
+            stop_instance=lambda iid: True,
+        )
+        assert test_context.bot_client is not None
+        assert test_context.bot_client.user == "ResolvedUser"
+
         # Test POST /api/bot/stop
         resp_stop = await client.post("/api/bot/stop")
         assert resp_stop.status == 200

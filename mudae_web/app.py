@@ -19,10 +19,32 @@ class WebServerContext:
         self.runtime_manager = runtime_manager
         self.active_preset_name = default_preset
         self.active_instance_id = None
-        self.bot_client = None  # Reference to the active discord.Client instance
+        self._bot_client = None  # Reference to the active discord.Client instance if set directly
         self.recent_events = deque(maxlen=200)
         self.ws_clients = weakref.WeakSet()
         self.start_time = time.time()
+
+    @property
+    def bot_client(self):
+        """Dynamic resolution of active Discord client instance."""
+        if getattr(self, "_bot_client", None) is not None:
+            return self._bot_client
+        if self.runtime_manager:
+            if getattr(self, "active_instance_id", None):
+                instance = getattr(self.runtime_manager, "_instances", {}).get(self.active_instance_id)
+                if instance:
+                    client, _ = instance.get_client()
+                    if client is not None:
+                        return client
+            for instance in list(getattr(self.runtime_manager, "_instances", {}).values()):
+                client, _ = instance.get_client()
+                if client is not None:
+                    return client
+        return None
+
+    @bot_client.setter
+    def bot_client(self, value):
+        self._bot_client = value
 
     def broadcast_event(self, event_type: str, data: dict):
         """Dispatch event to all active WebSocket clients and append to bounded ring buffer."""
@@ -393,19 +415,21 @@ def create_app(context: WebServerContext) -> web.Application:
 
     async def api_bot_stop(request):
         mgr = context.runtime_manager
-        if not mgr or not context.active_instance_id:
-            # Check if bot client exists directly
-            client = context.bot_client
-            if client:
-                close_res = client.close()
-                if asyncio.iscoroutine(close_res):
-                    asyncio.create_task(close_res)
-                context.broadcast_event("system", {"message": "Bot stopping..."})
-                return web.json_response({"success": True, "message": "Bot stopped"})
-            return web.json_response({"success": False, "error": "No running bot instance."}, status=400)
-        stopped = mgr.stop_instance(context.active_instance_id)
-        context.broadcast_event("system", {"message": "Bot stopped."})
-        return web.json_response({"success": True, "stopped": stopped})
+        if mgr and getattr(mgr, "_instances", None):
+            instance_id = context.active_instance_id or next(iter(mgr._instances.keys()), None)
+            if instance_id and instance_id in mgr._instances:
+                stopped = mgr.stop_instance(instance_id)
+                context.broadcast_event("system", {"message": "Bot stopped."})
+                return web.json_response({"success": True, "stopped": stopped})
+
+        client = context.bot_client
+        if client and hasattr(client, "close") and callable(client.close):
+            close_res = client.close()
+            if asyncio.iscoroutine(close_res):
+                asyncio.create_task(close_res)
+            context.broadcast_event("system", {"message": "Bot stopping..."})
+            return web.json_response({"success": True, "message": "Bot stopped"})
+        return web.json_response({"success": False, "error": "No running bot instance."}, status=400)
 
     async def api_bot_restart(request):
         mgr = context.runtime_manager

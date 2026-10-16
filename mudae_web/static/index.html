@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>mudademote - server panel</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="theme-offwhite">
+  <div class="panel-layout">
+    <!-- Pterodactyl Top Navigation Bar -->
+    <header class="ptero-navbar">
+      <div class="navbar-left">
+        <div class="server-brand">
+          <svg class="brand-pterodactyl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+          <div class="server-breadcrumb">
+            <span class="root-node">mudademote</span>
+            <span class="divider">/</span>
+            <span id="txtActivePreset" class="server-node">example</span>
+          </div>
+        </div>
+
+        <div class="preset-dropdown-wrap">
+          <select id="presetSelect" class="ptero-select"></select>
+        </div>
+      </div>
+
+      <div class="navbar-right">
+        <div class="server-connection-tag">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+            <line x1="6" y1="6" x2="6.01" y2="6"></line>
+            <line x1="6" y1="18" x2="6.01" y2="18"></line>
+          </svg>
+          <span id="txtAllocation">127.0.0.1:8080</span>
+        </div>
+
+        <div id="statusBadge" class="status-badge offline">
+          <span class="status-dot"></span>
+          <span id="statusLabel">offline</span>
+        </div>
+
+        <!-- Pterodactyl Power Buttons -->
+        <div class="power-buttons">
+          <button id="btnPowerStart" class="btn-power btn-start" title="start bot">start</button>
+          <button id="btnPowerRestart" class="btn-power btn-restart" title="restart bot">restart</button>
+          <button id="btnPowerStop" class="btn-power btn-stop" title="stop bot">stop</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Subheader Navigation Tabs -->
+    <nav class="ptero-subnav">
+      <button class="subnav-tab active" data-tab="tab-console">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="4 17 10 11 4 5"></polyline>
+          <line x1="12" y1="19" x2="20" y2="19"></line>
+        </svg>
+        <span>console</span>
+      </button>
+
+      <button class="subnav-tab" data-tab="tab-configs">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+        </svg>
+        <span>configs</span>
+      </button>
+
+      <button class="subnav-tab" data-tab="tab-automation">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+          <rect x="9" y="9" width="6" height="6"></rect>
+          <line x1="9" y1="1" x2="9" y2="4"></line>
+          <line x1="15" y1="1" x2="15" y2="4"></line>
+          <line x1="9" y1="20" x2="9" y2="23"></line>
+          <line x1="15" y1="20" x2="15" y2="23"></line>
+          <line x1="20" y1="9" x2="23" y2="9"></line>
+          <line x1="20" y1="14" x2="23" y2="14"></line>
+          <line x1="1" y1="9" x2="4" y2="9"></line>
+          <line x1="1" y1="14" x2="4" y2="14"></line>
+        </svg>
+        <span>automation</span>
+      </button>
+
+      <button class="subnav-tab" data-tab="tab-discovery">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="2" y1="12" x2="22" y2="12"></line>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+        </svg>
+        <span>network / discovery</span>
+      </button>
+
+      <button class="subnav-tab" data-tab="tab-settings">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+        <span>settings</span>
+      </button>
+    </nav>
+
+    <!-- CONTENT TABS -->
+
+    <!-- 1. CONSOLE TAB (Pterodactyl Main View) -->
+    <main id="tab-console" class="tab-pane active">
+      <!-- 4 Top Stat Metric Cards -->
+      <section class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-top">
+            <span class="metric-title">kakera power</span>
+            <span id="metricPowerText" class="metric-badge">0%</span>
+          </div>
+          <div class="metric-value-wrap">
+            <div id="metricPowerValue" class="metric-val">0%</div>
+            <div class="metric-bar-bg">
+              <div id="metricPowerBar" class="metric-bar-fill" style="width: 0%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-top">
+            <span class="metric-title">rolls remaining</span>
+            <span id="metricRollsBadge" class="metric-badge">--</span>
+          </div>
+          <div class="metric-value-wrap">
+            <div id="metricRollsValue" class="metric-val">--</div>
+            <div id="metricRollsReset" class="metric-sub">next reset: --</div>
+          </div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-top">
+            <span class="metric-title">claim status</span>
+            <span id="metricClaimBadge" class="metric-badge">cooldown</span>
+          </div>
+          <div class="metric-value-wrap">
+            <div id="metricClaimValue" class="metric-val">cooldown</div>
+            <div id="metricClaimReset" class="metric-sub">next claim: --</div>
+          </div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-top">
+            <span class="metric-title">server allocation</span>
+            <span class="metric-badge">active</span>
+          </div>
+          <div class="metric-value-wrap">
+            <div id="metricGuildName" class="metric-val truncate">--</div>
+            <div id="metricChannelName" class="metric-sub truncate">channel: --</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Pterodactyl Terminal Window -->
+      <section class="terminal-card">
+        <div class="terminal-chrome">
+          <div class="terminal-title">
+            <span class="terminal-dots">
+              <span class="dot red"></span>
+              <span class="dot yellow"></span>
+              <span class="dot green"></span>
+            </span>
+            <span class="terminal-path">console:~/mudademote$</span>
+          </div>
+          <div class="terminal-actions">
+            <button class="chip-action" data-cmd="$tu">$tu</button>
+            <button class="chip-action" data-cmd="$wll">$wll</button>
+            <button class="chip-action" data-cmd="$dk">$dk</button>
+            <button class="chip-action" data-cmd="$rolls">$rolls</button>
+            <button class="chip-action" data-cmd="$p">$p</button>
+            <button id="btnClearConsole" class="chip-clear">clear</button>
+          </div>
+        </div>
+
+        <div id="consoleLogStream" class="terminal-logs">
+          <div class="log-line system">[system] connected to daemon. ready for commands.</div>
+        </div>
+
+        <!-- Terminal Command Input Bar -->
+        <div class="terminal-input-bar">
+          <span class="prompt-arrow">&gt;</span>
+          <input type="text" id="terminalCmdInput" class="terminal-input" placeholder="type a command (e.g. $tu, $wll, $dk, $rolls) and press enter...">
+          <button id="btnTerminalSend" class="btn-terminal-send">send</button>
+        </div>
+      </section>
+    </main>
+
+    <!-- 2. CONFIGS TAB (Pterodactyl File / Configuration Editor) -->
+    <main id="tab-configs" class="tab-pane">
+      <div class="ptero-card">
+        <div class="card-header-bar">
+          <div class="header-titles">
+            <h2>configuration manager</h2>
+            <p>edit preset properties or modify the raw json specification directly.</p>
+          </div>
+          <div class="view-toggles">
+            <button id="btnToggleVisual" class="btn-toggle active">visual editor</button>
+            <button id="btnToggleRaw" class="btn-toggle">raw json</button>
+          </div>
+        </div>
+
+        <!-- Visual Form Mode -->
+        <div id="configVisualView" class="config-view active">
+          <div class="ptero-form-grid">
+            <div class="form-field">
+              <label>discord token</label>
+              <input type="password" id="cfgToken" class="ptero-input" placeholder="user account token">
+            </div>
+
+            <div class="form-field">
+              <label>roll channel id</label>
+              <input type="text" id="cfgChannelId" class="ptero-input" placeholder="roll channel id or 'auto'">
+            </div>
+
+            <div class="form-field">
+              <label>command channel id (optional)</label>
+              <input type="text" id="cfgCmdChannelId" class="ptero-input" placeholder="silent command channel id">
+            </div>
+
+            <div class="form-field">
+              <label>roll command</label>
+              <input type="text" id="cfgRollCommand" class="ptero-input" value="wa">
+            </div>
+
+            <div class="form-field">
+              <label>minimum kakera to claim</label>
+              <input type="number" id="cfgMinKakera" class="ptero-input" value="100">
+            </div>
+
+            <div class="form-field">
+              <label>roll speed (seconds)</label>
+              <input type="number" step="0.1" id="cfgRollSpeed" class="ptero-input" value="0.4">
+            </div>
+
+            <div class="form-field">
+              <label>claim reset interval (minutes)</label>
+              <input type="number" id="cfgClaimInterval" class="ptero-input" value="180">
+            </div>
+
+            <div class="form-field">
+              <label>roll reset interval (minutes)</label>
+              <input type="number" id="cfgRollInterval" class="ptero-input" value="60">
+            </div>
+          </div>
+        </div>
+
+        <!-- Raw JSON Mode -->
+        <div id="configRawView" class="config-view">
+          <textarea id="rawJsonEditor" class="ptero-code-editor" spellcheck="false"></textarea>
+        </div>
+
+        <div class="card-footer-bar">
+          <button id="btnSaveConfig" class="btn-ptero-primary">save content</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- 3. AUTOMATION TAB -->
+    <main id="tab-automation" class="tab-pane">
+      <div class="ptero-card">
+        <div class="card-header-bar">
+          <div class="header-titles">
+            <h2>mudae automation suite</h2>
+            <p>enable, tune, and monitor modular gameplay automation routines.</p>
+          </div>
+        </div>
+
+        <div class="automation-cards-grid">
+          <!-- Auto Badges -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>auto-badges ($badge)</h3>
+                <p>buys badges in mathematically optimal cost-efficiency order (ruby 4 discount rush).</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chkAutoBadges">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="feature-box-controls">
+              <div class="ctrl-group">
+                <label>progression strategy</label>
+                <select id="selBadgeStrategy" class="ptero-select-sm">
+                  <option value="optimal">optimal (ruby 4 discount rush)</option>
+                  <option value="balanced">balanced</option>
+                </select>
+              </div>
+              <div class="ctrl-group">
+                <label>maximum tier ceiling</label>
+                <select id="selBadgeMaxTier" class="ptero-select-sm">
+                  <option value="4">tier iv (max)</option>
+                  <option value="3">tier iii</option>
+                  <option value="2">tier ii</option>
+                  <option value="1">tier i</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Kakera Tower -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>kakera tower ($kt, $build)</h3>
+                <p>automatically constructs tower floors once badges are maxed.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chkAutoTower">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="feature-box-controls">
+              <div class="ctrl-group">
+                <label>maximum target floors</label>
+                <input type="number" id="numTowerMaxFloors" class="ptero-input-sm" min="1" max="50" value="10">
+              </div>
+            </div>
+          </div>
+
+          <!-- Wishlist Auto-Sync -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>wishlist auto-sync ($wl, $wll)</h3>
+                <p>imports wishlist from mudae directly into bot claim filters.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chkAutoWishlistSync">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="feature-box-controls">
+              <label class="ptero-checkbox">
+                <input type="checkbox" id="chkWishlistRemoveClaimed">
+                <span>remove character from wishlist after claim</span>
+              </label>
+              <button id="btnSyncWlNow" class="btn-ptero-secondary mt-2">sync wishlist now</button>
+            </div>
+          </div>
+
+          <!-- Main Account Gifting -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>main account gifting ($give, $givek)</h3>
+                <p>automatically gifts claimed characters and surplus kakera to main account.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chkAutoGiveCharacters">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="feature-box-controls">
+              <div class="ctrl-group">
+                <label>main account discord id</label>
+                <input type="text" id="txtMainAccountId" class="ptero-input-sm" placeholder="e.g. 123456789012345678">
+              </div>
+              <label class="ptero-checkbox mt-2">
+                <input type="checkbox" id="chkAutoGiveKakera">
+                <span>auto-gift surplus kakera ($givek)</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Gamemode 2 -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>gamemode 2 pool optimization</h3>
+                <p>auto-enforces $limroul 1 1 1 1 for maximum high-value character rates.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chkAutoLimroul" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Dailies -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>automated dailies ($daily, $p, $dk)</h3>
+                <p>handles $p, $daily, $dk, and voting reminders on schedule.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chkAutoDailies" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-footer-bar">
+          <button id="btnSaveAutomation" class="btn-ptero-primary">save content</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- 4. NETWORK / AUTO-DISCOVERY & SERVER ACCESS TAB -->
+    <main id="tab-discovery" class="tab-pane">
+      <div class="ptero-card">
+        <div class="card-header-bar">
+          <div class="header-titles">
+            <h2>server access & multi-guild management</h2>
+            <p>whitelist allowed servers, configure per-server channels, and assign active targets with absolute control.</p>
+          </div>
+          <div class="header-actions">
+            <span id="txtWhitelistSummary" class="status-pill subtle">all servers allowed</span>
+          </div>
+        </div>
+
+        <!-- Global Whitelist Toolbar -->
+        <div class="discovery-toolbar">
+          <button id="btnDiscoverServers" class="btn-ptero-secondary">
+            <span>scan joined servers</span>
+          </button>
+          <button id="btnAllowAllServers" class="btn-ptero-subtle">allow all</button>
+          <button id="btnDisallowAllServers" class="btn-ptero-subtle">disallow all</button>
+          <input type="text" id="txtFilterServers" class="ptero-input-sm" placeholder="filter servers...">
+        </div>
+
+        <!-- Server List Table -->
+        <div class="server-table-wrap">
+          <table class="server-table">
+            <thead>
+              <tr>
+                <th>server</th>
+                <th>members</th>
+                <th>mudae bot</th>
+                <th>access status</th>
+                <th>role / target</th>
+                <th class="text-right">actions</th>
+              </tr>
+            </thead>
+            <tbody id="serverListBody">
+              <tr>
+                <td colspan="6" class="table-empty">click "scan joined servers" to load servers connected to this bot account.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Per-Server Channel Configurator Drawer / Panel -->
+        <div id="serverConfigPanel" class="discovery-panel hidden mt-3">
+          <div class="panel-header-bar">
+            <div class="server-cfg-header">
+              <div id="cfgServerIconWrap" class="cfg-guild-icon"></div>
+              <div>
+                <h3 id="cfgServerTitle">server configuration</h3>
+                <span id="cfgServerId" class="code-tag">id: --</span>
+              </div>
+            </div>
+            <button id="btnCloseServerConfig" class="btn-icon-close" title="close">&times;</button>
+          </div>
+
+          <div class="server-config-grid mt-3">
+            <!-- Left column: Primary Channels & Target Toggle -->
+            <div class="cfg-col">
+              <div class="cfg-field">
+                <label class="ptero-checkbox">
+                  <input type="checkbox" id="chkSetAsActiveTarget">
+                  <strong>set as active target server for rolling</strong>
+                </label>
+                <p class="field-hint">when active, the bot uses this server's channels for its main roll cycles.</p>
+              </div>
+
+              <div class="cfg-field">
+                <label>primary roll channel</label>
+                <select id="selServerRollChannel" class="ptero-select w-full"></select>
+                <p class="field-hint">channel where $wa, $ha, etc. will be dispatched.</p>
+              </div>
+
+              <div class="cfg-field">
+                <label>mudae command channel</label>
+                <select id="selServerCmdChannel" class="ptero-select w-full"></select>
+                <p class="field-hint">channel for $tu, $wll, $give, $daily to prevent spamming roll chat.</p>
+              </div>
+
+              <div class="cfg-field">
+                <label>server mudae prefix</label>
+                <input type="text" id="txtServerPrefix" class="ptero-input" value="$" placeholder="$">
+                <p class="field-hint">custom prefix if this server uses something other than $.</p>
+              </div>
+            </div>
+
+            <!-- Right column: Snipe & Kakera Channel Checklists -->
+            <div class="cfg-col">
+              <div class="cfg-field">
+                <label>character snipe channels</label>
+                <div id="snipeChannelsList" class="channel-checklist-box">
+                  <span class="checklist-empty">scan server to load channels</span>
+                </div>
+                <p class="field-hint">check all channels where the bot should listen and snipe characters.</p>
+              </div>
+
+              <div class="cfg-field">
+                <label>kakera snipe channels</label>
+                <div id="kakeraChannelsList" class="channel-checklist-box">
+                  <span class="checklist-empty">scan server to load channels</span>
+                </div>
+                <p class="field-hint">check all channels where the bot should click kakera reactions.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-footer-bar mt-3">
+            <button id="btnSaveServerConfig" class="btn-ptero-primary">save server rules & sync live</button>
+            <button id="btnCancelServerConfig" class="btn-ptero-subtle">cancel</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+
+    <!-- 5. SETTINGS TAB -->
+    <main id="tab-settings" class="tab-pane">
+      <div class="ptero-card">
+        <div class="card-header-bar">
+          <div class="header-titles">
+            <h2>general server settings</h2>
+            <p>discord webhooks and expert debugging options.</p>
+          </div>
+        </div>
+
+        <div class="ptero-form-grid">
+          <div class="form-field full-width">
+            <label>remote log webhook url</label>
+            <input type="text" id="cfgWebhookUrl" class="ptero-input" placeholder="https://discord.com/api/webhooks/...">
+          </div>
+
+          <div class="form-field">
+            <label class="ptero-checkbox">
+              <input type="checkbox" id="cfgDebugMode">
+              <span>enable expert debug logging</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="card-footer-bar">
+          <button id="btnSaveGeneralSettings" class="btn-ptero-primary">save content</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

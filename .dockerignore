@@ -1,0 +1,16 @@
+.git
+.github
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+tests
+screenshots
+packaging
+dist
+build
+*.spec
+*.tmp
+update_journal.json
+update_transaction.lock

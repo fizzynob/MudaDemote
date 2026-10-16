@@ -64,6 +64,17 @@ def configure_client(
         preset_data.get("forcedivorce_channel_id") or ""
     ).strip()
 
+    # Server / Guild access control and target guild
+    raw_allowed = preset_data.get("allowed_guild_ids")
+    if raw_allowed is not None:
+        client.allowed_guild_ids = {str(item).strip() for item in raw_allowed if str(item).strip()}
+    else:
+        client.allowed_guild_ids = None
+
+    raw_target_guild = preset_data.get("target_guild_id")
+    client.target_guild_id = str(raw_target_guild).strip() if raw_target_guild else None
+    client.server_configs = dict(preset_data.get("server_configs") or {})
+
     # Basic rolling and snipe settings
     client.min_kakera = preset_data.get("min_kakera", 100)
     client.base_min_kakera = client.min_kakera
@@ -432,6 +443,21 @@ def configure_client(
     ]
     client.mk_bypass_power_check = preset_data.get("mk_bypass_power_check", False)
 
+    # Server edition & complete Mudae automation settings
+    client.auto_discovery_enabled = bool(preset_data.get("auto_discovery_enabled", False))
+    client.auto_badges_enabled = bool(preset_data.get("auto_badges_enabled", False))
+    client.badge_strategy = str(preset_data.get("badge_strategy", "optimal")).strip().lower()
+    client.badge_max_tier = int(preset_data.get("badge_max_tier", 4) or 4)
+    client.auto_tower_enabled = bool(preset_data.get("auto_tower_enabled", False))
+    client.tower_max_floors = int(preset_data.get("tower_max_floors", 10) or 10)
+    client.auto_wishlist_sync_enabled = bool(preset_data.get("auto_wishlist_sync_enabled", False))
+    client.wishlist_sync_interval_hours = int(preset_data.get("wishlist_sync_interval_hours", 6) or 6)
+    client.wishlist_remove_claimed = bool(preset_data.get("wishlist_remove_claimed", False))
+    client.auto_give_characters_enabled = bool(preset_data.get("auto_give_characters_enabled", False))
+    client.auto_give_kakera_enabled = bool(preset_data.get("auto_give_kakera_enabled", False))
+    client.auto_give_kakera_threshold = int(preset_data.get("auto_give_kakera_threshold", 5000) or 5000)
+    client.auto_limroul_enabled = bool(preset_data.get("auto_limroul_enabled", True))
+
     # Reset / status anchors and intervals
     client.next_claim_reset_at_utc = None
     client.roll_reset_at_utc = None
@@ -681,9 +707,15 @@ LIVE_CONFIG_ATTRIBUTES = frozenset({
     "farm_forcedivorce_after_other_claim", "op_perk_5_only",
     "auto_divorce_protect_wishes", "wish_starwish_kakera_only",
     "auto_divorce_enabled", "auto_divorce_max_kakera", "auto_divorce_series",
-    "auto_divorce_blacklist", "auto_divorce_blacklist_series",
     "mk_bypass_power_check", "kakera_power_thresholds", "debug_mode",
     "debug_log_categories", "webhook_url", "webhook_log_types",
+    "auto_discovery_enabled", "auto_badges_enabled", "badge_strategy",
+    "badge_max_tier", "auto_tower_enabled", "tower_max_floors",
+    "auto_wishlist_sync_enabled", "wishlist_sync_interval_hours",
+    "wishlist_remove_claimed", "auto_give_characters_enabled",
+    "auto_give_kakera_enabled", "auto_give_kakera_threshold",
+    "auto_limroul_enabled", "allowed_guild_ids", "target_guild_id",
+    "server_configs",
 })
 
 

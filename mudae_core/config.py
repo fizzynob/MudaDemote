@@ -195,13 +195,14 @@ def validate_preset(data, resolved_token=None, require_runtime=True):
         if not str(data.get(key, "")).strip():
             errors.append("{} is required.".format(label))
     channel_id = data.get("channel_id")
-    if require_runtime or channel_id not in (None, ""):
+    is_auto_channel = str(channel_id).strip().lower() in ("auto", "0", "") and bool(data.get("auto_discovery_enabled", False))
+    if not is_auto_channel and (require_runtime or channel_id not in (None, "")):
         try:
             channel_id = int(channel_id or 0)
             if channel_id <= 0:
                 raise ValueError
         except (TypeError, ValueError):
-            errors.append("Discord Channel ID must be a positive number.")
+            errors.append("Discord Channel ID must be a positive number or 'auto'.")
     command_channel = data.get("command_channel_id")
     if command_channel not in (None, ""):
         try:
@@ -248,6 +249,40 @@ def validate_preset(data, resolved_token=None, require_runtime=True):
             except (TypeError, ValueError):
                 errors.append("{} Channel ID {!r} must be a positive number.".format(label, channel))
 
+    target_guild = data.get("target_guild_id")
+    if target_guild not in (None, ""):
+        try:
+            if int(target_guild) <= 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            errors.append("Target Guild ID must be empty or a positive number.")
+
+    allowed_guilds = data.get("allowed_guild_ids")
+    if allowed_guilds is not None:
+        if not isinstance(allowed_guilds, (list, tuple, set)):
+            errors.append("allowed_guild_ids must be a list of Discord guild IDs.")
+        else:
+            for gid in allowed_guilds:
+                try:
+                    if int(gid) <= 0:
+                        raise ValueError
+                except (TypeError, ValueError):
+                    errors.append("Allowed Guild ID {!r} must be a positive number.".format(gid))
+
+    server_configs = data.get("server_configs")
+    if server_configs is not None:
+        if not isinstance(server_configs, dict):
+            errors.append("server_configs must be a dictionary mapping Guild IDs to channel configurations.")
+        else:
+            for gid, scfg in server_configs.items():
+                try:
+                    if int(gid) <= 0:
+                        raise ValueError
+                except (TypeError, ValueError):
+                    errors.append("Server config key {!r} must be a positive Guild ID.".format(gid))
+                if not isinstance(scfg, dict):
+                    errors.append("Configuration for server {} must be an object.".format(gid))
+
     farm_enabled = bool(data.get("farm_character_enabled", False))
     farm_characters = [
         str(item or "").strip()
@@ -280,6 +315,7 @@ def validate_preset(data, resolved_token=None, require_runtime=True):
         "auto_us_limit", "auto_rolls_limit", "panic_roll_minutes", "auto_divorce_max_kakera",
         "max_claim_rank", "max_like_rank", "hybrid_panic_instant_claim_min_kakera",
         "hybrid_panic_instant_claim_max_rank", "oh_unknown_explore_clicks", "auto_dk_min_power",
+        "auto_give_kakera_threshold", "tower_max_floors", "wishlist_sync_interval_hours",
     ]
     for key in non_negative:
         if key in data and data[key] is not None:
@@ -313,6 +349,14 @@ def validate_preset(data, resolved_token=None, require_runtime=True):
 
     if data.get("kakera_filter_match_mode", "all") not in ("all", "any"):
         errors.append("Match selected filters must be All (all) or Any (any).")
+
+    if "badge_max_tier" in data and data["badge_max_tier"] is not None:
+        try:
+            tier = int(data["badge_max_tier"])
+            if tier < 1 or tier > 4:
+                errors.append("badge_max_tier must be an integer between 1 and 4.")
+        except (TypeError, ValueError):
+            errors.append("badge_max_tier must be an integer between 1 and 4.")
 
     delay_range = data.get("reactive_kakera_delay_range", [0.3, 1.0])
     if not isinstance(delay_range, (list, tuple)) or len(delay_range) != 2:

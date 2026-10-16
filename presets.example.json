@@ -135,6 +135,25 @@
     "webhook_url": "",
     "webhook_log_types": ["ERROR", "WARN", "CLAIM", "KAKERA"],
     "debug_mode": false,
-    "debug_log_categories": ["all"]
+    "debug_log_categories": ["all"],
+
+    "auto_discovery_enabled": false,
+    "auto_badges_enabled": false,
+    "badge_strategy": "optimal",
+    "badge_max_tier": 4,
+    "auto_tower_enabled": false,
+    "tower_max_floors": 10,
+    "auto_wishlist_sync_enabled": false,
+    "wishlist_sync_interval_hours": 6,
+    "wishlist_remove_claimed": false,
+    "auto_give_characters_enabled": false,
+    "auto_give_kakera_enabled": false,
+    "auto_give_kakera_threshold": 5000,
+    "auto_limroul_enabled": true,
+
+    "target_guild_id": null,
+    "allowed_guild_ids": null,
+    "server_configs": {}
   }
 }
+

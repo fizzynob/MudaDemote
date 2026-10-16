@@ -255,6 +255,12 @@ try:
     from mudae_core.config import atomic_write_json, load_json, validate_preset
     from mudae_core.loot import LootAutomation
     from mudae_core.roll_mode import adaptive_slash_ledger
+    from mudae_core.badges import BadgeAutomation
+    from mudae_core.kakera_tower import TowerAutomation
+    from mudae_core.wishlist_sync import WishlistSync
+    from mudae_core.gifting import GiftingAutomation
+    from mudae_core.gamemode import GamemodeAutomation
+    from mudae_core.auto_discovery import ServerDiscovery, is_guild_allowed
 except (ModuleNotFoundError, ImportError) as core_error:
     missing_module = str(getattr(core_error, "name", ""))
     if missing_module and not missing_module.startswith("mudae_core"):
@@ -292,6 +298,12 @@ except (ModuleNotFoundError, ImportError) as core_error:
     from mudae_core.config import atomic_write_json, load_json, validate_preset
     from mudae_core.roll_mode import adaptive_slash_ledger
     from mudae_core.loot import LootAutomation
+    from mudae_core.badges import BadgeAutomation
+    from mudae_core.kakera_tower import TowerAutomation
+    from mudae_core.wishlist_sync import WishlistSync
+    from mudae_core.gifting import GiftingAutomation
+    from mudae_core.gamemode import GamemodeAutomation
+    from mudae_core.auto_discovery import ServerDiscovery, is_guild_allowed
 
 if os.name == 'nt':
     import msvcrt
@@ -1148,7 +1160,12 @@ def run_bot(preset_name, preset_data, log_function=print_log):
     delay_seconds = preset_data.get("delay_seconds", 0)
     start_delay = preset_data.get("start_delay", 0)
 
-    client = commands.Bot(command_prefix=prefix, chunk_guilds_at_startup=False, self_bot=True)
+    client = commands.Bot(
+        command_prefix=prefix,
+        chunk_guilds_at_startup=False,
+        self_bot=True,
+        max_messages=100,
+    )
     client.is_paused = _global_paused
     client.hourly_tu_refresh = bool(preset_data.get("hourly_tu_refresh", False))
     client._pause_generation = 1 if _global_paused else 0
@@ -3091,13 +3108,71 @@ def run_bot(preset_name, preset_data, log_function=print_log):
         BotLogger.log(f"Ready: {client.user}", preset_name, "INFO")
         client.loop.create_task(health_monitor_task())
 
-        try: target_ch_id = int(target_channel_id)
+        target_ch_id = None
+        try:
+            if target_channel_id and str(target_channel_id).strip().lower() != "auto":
+                target_ch_id = int(target_channel_id)
         except Exception:
-            BotLogger.log(f"Err: Invalid channel ID format: {target_channel_id}", preset_name, "ERROR"); await client.close(); return
+            target_ch_id = None
+
+        # Check server_configs and target_guild_id overrides
+        if getattr(client, "target_guild_id", None):
+            if not is_guild_allowed(client.target_guild_id, client.allowed_guild_ids):
+                BotLogger.log(f"Err: Configured target guild {client.target_guild_id} is not in allowed_guild_ids whitelist.", preset_name, "ERROR")
+                await client.close()
+                return
+            scfg = (getattr(client, "server_configs", None) or {}).get(str(client.target_guild_id), {})
+            if scfg:
+                if scfg.get("channel_id") and (target_ch_id is None or target_ch_id == 0):
+                    try:
+                        target_ch_id = int(scfg["channel_id"])
+                        client.target_channel_id = target_ch_id
+                    except (TypeError, ValueError):
+                        pass
+                if scfg.get("command_channel_id") and not client.command_channel_id_preset:
+                    client.command_channel_id_preset = str(scfg["command_channel_id"])
+                if scfg.get("snipe_channels"):
+                    client.snipe_channels = {int(x) for x in scfg["snipe_channels"] if str(x).isdigit()}
+                if scfg.get("kakera_snipe_channels"):
+                    client.kakera_snipe_channels = {int(x) for x in scfg["kakera_snipe_channels"] if str(x).isdigit()}
+                if scfg.get("mudae_prefix"):
+                    client.mudae_prefix = str(scfg["mudae_prefix"])
+
+        if target_ch_id is None or target_ch_id == 0:
+            BotLogger.log("Auto-Discovery: Scanning accessible servers for Mudae channels...", preset_name, "INFO")
+            guilds = ServerDiscovery.list_accessible_guilds(client, client.allowed_guild_ids)
+            allowed_guilds = [g for g in guilds if g.get("allowed", True)]
+            if client.allowed_guild_ids is not None and not allowed_guilds:
+                BotLogger.log("Err: No allowed Discord servers found in allowed_guild_ids whitelist.", preset_name, "ERROR")
+                await client.close()
+                return
+            target_guild = None
+            if getattr(client, "target_guild_id", None):
+                target_guild = next((g for g in allowed_guilds if str(g["id"]) == str(client.target_guild_id)), None)
+            if not target_guild:
+                target_guild = next((g for g in allowed_guilds if g.get("mudae_present")), allowed_guilds[0] if allowed_guilds else None)
+            if target_guild:
+                scan = ServerDiscovery.inspect_guild_channels(client, int(target_guild["id"]))
+                if scan.get("recommended_roll_channel"):
+                    target_ch_id = int(scan["recommended_roll_channel"]["id"])
+                    client.target_channel_id = target_ch_id
+                    client.target_guild_id = str(target_guild["id"])
+                    BotLogger.log(f"Auto-Discovery: Selected #{scan['recommended_roll_channel']['name']} ({target_ch_id}) in '{scan['guild_name']}'", preset_name, "INFO")
+                    if scan.get("recommended_command_channel") and not client.command_channel_id_preset:
+                        client.command_channel_id_preset = str(scan["recommended_command_channel"]["id"])
+                        BotLogger.log(f"Auto-Discovery: Selected command channel #{scan['recommended_command_channel']['name']}", preset_name, "INFO")
+
+        if not target_ch_id:
+            BotLogger.log(f"Err: Invalid channel ID format or no channel discovered: {target_channel_id}", preset_name, "ERROR"); await client.close(); return
 
         channel = client.get_channel(target_ch_id) or await client.fetch_channel(target_ch_id)
         if not channel or not isinstance(channel, (discord.TextChannel, discord.Thread, discord.VoiceChannel)):
             BotLogger.log(f"Err: Target channel {target_ch_id} not available or not text-like", preset_name, "ERROR"); await client.close(); return
+
+        if getattr(channel, "guild", None) and not is_guild_allowed(channel.guild.id, client.allowed_guild_ids):
+            BotLogger.log(f"Err: Target channel {target_ch_id} belongs to unapproved server '{channel.guild.name}' ({channel.guild.id})", preset_name, "ERROR")
+            await client.close()
+            return
 
         client._main_channel = channel
 
@@ -4322,6 +4397,39 @@ def run_bot(preset_name, preset_data, log_function=print_log):
                 ).replace(second=0, microsecond=0)
                 schedule_points_refresh(client.next_p_claim_at_utc)
         await client.sphere_runtime.run_available_sphere_games(channel)
+
+        # Gamemode 2 optimization
+        if getattr(client, "gamemode_automation", None) and client.gamemode_automation.enabled:
+            now_mono = time.monotonic()
+            if now_mono - getattr(client.gamemode_automation, "last_enforced", 0.0) >= 3600:
+                client.gamemode_automation.last_enforced = now_mono
+                await client.gamemode_automation.ensure_optimal_limits(_get_command_channel() or channel, client.mudae_prefix)
+
+        # Badges progression check
+        if getattr(client, "badge_automation", None) and client.badge_automation.enabled:
+            current_k = getattr(client, "last_known_kakera", None) or 0
+            next_up = client.badge_automation.get_next_upgrade(current_k)
+            if next_up is not None:
+                badge_name, target_lvl, cost = next_up
+                cmd = client.badge_automation.get_upgrade_command(badge_name, target_lvl, client.mudae_prefix)
+                BotLogger.log(f"Auto-Badge: Purchasing {badge_name} (Tier {target_lvl}) for {cost} kakera...", preset_name, "INFO")
+                await guarded_send(_get_command_channel() or channel, cmd)
+                await active_delay(2.0)
+
+        # Kakera Tower check
+        if getattr(client, "tower_automation", None) and client.tower_automation.enabled:
+            current_k = getattr(client, "last_known_kakera", None) or 0
+            if client.tower_automation.can_build(current_k, badges_maxed=True):
+                cmd = client.tower_automation.get_build_command(client.mudae_prefix)
+                BotLogger.log("Auto-Tower: Building next tower floor...", preset_name, "INFO")
+                await guarded_send(_get_command_channel() or channel, cmd)
+                await active_delay(2.0)
+
+        # Surplus Kakera Gifting check
+        if getattr(client, "gifting_automation", None) and client.gifting_automation.give_kakera:
+            current_k = getattr(client, "last_known_kakera", None) or 0
+            await client.gifting_automation.transfer_kakera(_get_command_channel() or channel, current_k, client.mudae_prefix)
+
         return True
 
     async def drain_deferred_independent_work(channel):
@@ -6440,6 +6548,17 @@ def run_bot(preset_name, preset_data, log_function=print_log):
                     BotLogger.log(f"Auto-Divorce: {char_name} qualifies ({reason}).", preset_name, "INFO")
                     await execute_auto_divorce(client, channel, char_name)
 
+        # Wishlist removal & Main Account Gifting
+        if getattr(client, "wishlist_sync", None) is not None:
+            client.wishlist_sync.on_character_claimed(char_name)
+
+        if (
+            getattr(client, "gifting_automation", None) is not None
+            and client.gifting_automation.give_characters
+            and not farm_character_claimed
+        ):
+            await client.gifting_automation.transfer_character(channel, char_name, mudae_prefix=client.mudae_prefix)
+
         if (consumes_claim and client.auto_rt_after_claim and client.rt_available
                 and not client.is_paused and not farm_character_claimed):
             mins_to_reset = ((client.next_claim_reset_at_utc - now).total_seconds() / 60.0) if client.next_claim_reset_at_utc else None
@@ -7791,6 +7910,10 @@ def run_bot(preset_name, preset_data, log_function=print_log):
 
     @client.event
     async def on_message_edit(before, after):
+        if getattr(client, "allowed_guild_ids", None) is not None:
+            msg_guild = getattr(after, "guild", None)
+            if msg_guild is not None and not is_guild_allowed(msg_guild.id, client.allowed_guild_ids):
+                return
         if client.loot_automation is not None:
             client.loot_automation.on_message(after)
             return
@@ -7803,6 +7926,10 @@ def run_bot(preset_name, preset_data, log_function=print_log):
 
     @client.event
     async def on_raw_reaction_add(payload):
+        if getattr(client, "allowed_guild_ids", None) is not None:
+            p_guild_id = getattr(payload, "guild_id", None)
+            if p_guild_id is not None and not is_guild_allowed(p_guild_id, client.allowed_guild_ids):
+                return
         if client.loot_automation is not None:
             return
         message_id = getattr(payload, 'message_id', None)
@@ -7829,6 +7956,10 @@ def run_bot(preset_name, preset_data, log_function=print_log):
 
     @client.event
     async def on_raw_message_edit(payload):
+        if getattr(client, "allowed_guild_ids", None) is not None:
+            p_guild_id = getattr(payload, "guild_id", None)
+            if p_guild_id is not None and not is_guild_allowed(p_guild_id, client.allowed_guild_ids):
+                return
         if client.loot_automation is not None:
             return
         update_event = client._sphere_board_update_events.get(getattr(payload, 'message_id', None))
@@ -7861,6 +7992,10 @@ def run_bot(preset_name, preset_data, log_function=print_log):
 
     @client.event
     async def on_message(message):
+        if getattr(client, "allowed_guild_ids", None) is not None:
+            msg_guild = getattr(message, "guild", None)
+            if msg_guild is not None and not is_guild_allowed(msg_guild.id, client.allowed_guild_ids):
+                return
         if client.loot_automation is not None:
             client.loot_automation.on_message(message)
             if not client.is_paused:
@@ -7873,6 +8008,12 @@ def run_bot(preset_name, preset_data, log_function=print_log):
         capture_tu_response(message)
         client.sphere_runtime.capture_sphere_game_response(message)
         client.sphere_runtime.capture_sphere_game_bonus(message)
+        if getattr(client, "badge_automation", None):
+            client.badge_automation.on_badge_message(message.content or "")
+        if getattr(client, "tower_automation", None):
+            client.tower_automation.on_tower_message(message.content or "")
+        if getattr(client, "wishlist_sync", None):
+            client.wishlist_sync.on_wishlist_response(message.content or "", getattr(message, "embeds", None))
         is_roll = (message.channel.id == client.target_channel_id)
         is_snipe = (client.snipe_mode and message.channel.id in client.snipe_channels)
         is_kakera_snipe_channel = (
@@ -8512,6 +8653,43 @@ def run_bot(preset_name, preset_data, log_function=print_log):
         resolve_channel=_resolve_administrative_command_channel,
         wake_status=wake_status_loop,
         ambiguous_error=is_ambiguous_component_interaction_error,
+    )
+
+    client.badge_automation = BadgeAutomation(
+        client, preset_data,
+        send_func=guarded_send,
+        log_func=lambda msg, lvl="INFO": BotLogger.log(msg, preset_name, lvl),
+    )
+    client.tower_automation = TowerAutomation(
+        client, preset_data,
+        send_func=guarded_send,
+        log_func=lambda msg, lvl="INFO": BotLogger.log(msg, preset_name, lvl),
+    )
+    def _save_preset_patch(patch):
+        try:
+            current_presets = load_json(presets_path, {})
+            if preset_name in current_presets:
+                current_presets[preset_name].update(patch)
+                atomic_write_json(presets_path, current_presets)
+        except Exception as e:
+            BotLogger.log(f"Error persisting preset patch: {e}", preset_name, "WARN")
+
+    client.wishlist_sync = WishlistSync(
+        client, preset_data,
+        send_func=guarded_send,
+        save_func=_save_preset_patch,
+        log_func=lambda msg, lvl="INFO": BotLogger.log(msg, preset_name, lvl),
+    )
+    client.gifting_automation = GiftingAutomation(
+        client, preset_data,
+        send_func=guarded_send,
+        wait_func=active_delay,
+        log_func=lambda msg, lvl="INFO": BotLogger.log(msg, preset_name, lvl),
+    )
+    client.gamemode_automation = GamemodeAutomation(
+        client, preset_data,
+        send_func=guarded_send,
+        log_func=lambda msg, lvl="INFO": BotLogger.log(msg, preset_name, lvl),
     )
 
     # Keep the production orchestration callable for focused runtime testing

@@ -201,6 +201,34 @@ class ConfigTests(unittest.TestCase):
         invalid_string = dict(base, server_reset_minute="abc")
         self.assertTrue(any("server_reset_minute" in err for err in validate_preset(invalid_string)))
 
+    def test_server_control_preset_validation(self):
+        base = {
+            "token": "secret", "prefix": "////////", "mudae_prefix": "$",
+            "roll_command": "wa", "channel_id": "123", "claim_interval": 180,
+            "roll_interval": 60, "max_dk_power": 100,
+            "reactive_kakera_delay_range": [0.3, 1.0],
+        }
+        # Valid server controls
+        valid = dict(base, target_guild_id="99999", allowed_guild_ids=["111", "222"], server_configs={"99999": {"channel_id": "123"}})
+        self.assertEqual(validate_preset(valid), [])
+
+        # Invalid target_guild_id
+        invalid_target = dict(base, target_guild_id="not-a-number")
+        self.assertTrue(any("Target Guild ID" in err for err in validate_preset(invalid_target)))
+
+        # Invalid allowed_guild_ids
+        invalid_allowed_type = dict(base, allowed_guild_ids="not-a-list")
+        self.assertTrue(any("allowed_guild_ids" in err for err in validate_preset(invalid_allowed_type)))
+        invalid_allowed_val = dict(base, allowed_guild_ids=["abc"])
+        self.assertTrue(any("Allowed Guild ID" in err for err in validate_preset(invalid_allowed_val)))
+
+        # Invalid server_configs
+        invalid_scfg_type = dict(base, server_configs="not-a-dict")
+        self.assertTrue(any("server_configs" in err for err in validate_preset(invalid_scfg_type)))
+        invalid_scfg_key = dict(base, server_configs={"abc": {}})
+        self.assertTrue(any("Server config key" in err for err in validate_preset(invalid_scfg_key)))
+
 
 if __name__ == "__main__":
     unittest.main()
+

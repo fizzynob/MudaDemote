@@ -10,11 +10,11 @@ class GamemodeAutomation:
         self.client = client
         self.send = send_func
         self.log = log_func or (lambda msg, lvl="INFO": None)
-        self.enabled = bool(preset_data.get("auto_limroul_enabled", True))
+        self.enabled = bool(preset_data.get("auto_limroul_enabled", False))
         self.last_enforced = 0.0
 
     def update_config(self, preset_data: dict):
-        self.enabled = bool(preset_data.get("auto_limroul_enabled", True))
+        self.enabled = bool(preset_data.get("auto_limroul_enabled", False))
 
     async def ensure_optimal_limits(self, channel, mudae_prefix: str = "$") -> bool:
         """Send $limroul 1 1 1 1 to lock to minimum roulette pools in Gamemode 2."""

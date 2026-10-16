@@ -456,7 +456,7 @@ def configure_client(
     client.auto_give_characters_enabled = bool(preset_data.get("auto_give_characters_enabled", False))
     client.auto_give_kakera_enabled = bool(preset_data.get("auto_give_kakera_enabled", False))
     client.auto_give_kakera_threshold = int(preset_data.get("auto_give_kakera_threshold", 5000) or 5000)
-    client.auto_limroul_enabled = bool(preset_data.get("auto_limroul_enabled", True))
+    client.auto_limroul_enabled = bool(preset_data.get("auto_limroul_enabled", False))
 
     # Reset / status anchors and intervals
     client.next_claim_reset_at_utc = None

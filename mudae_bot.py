@@ -1160,12 +1160,15 @@ def run_bot(preset_name, preset_data, log_function=print_log):
     delay_seconds = preset_data.get("delay_seconds", 0)
     start_delay = preset_data.get("start_delay", 0)
 
-    client = commands.Bot(
-        command_prefix=prefix,
-        chunk_guilds_at_startup=False,
-        self_bot=True,
-        max_messages=100,
-    )
+    bot_kwargs = {"command_prefix": prefix, "chunk_guilds_at_startup": False, "self_bot": True}
+    try:
+        client = commands.Bot(**bot_kwargs)
+    except TypeError as e:
+        if "intents" in str(e).lower() and hasattr(discord, "Intents"):
+            bot_kwargs["intents"] = discord.Intents.default()
+            client = commands.Bot(**bot_kwargs)
+        else:
+            raise
     client.is_paused = _global_paused
     client.hourly_tu_refresh = bool(preset_data.get("hourly_tu_refresh", False))
     client._pause_generation = 1 if _global_paused else 0
@@ -3116,7 +3119,7 @@ def run_bot(preset_name, preset_data, log_function=print_log):
             target_ch_id = None
 
         # Check if the user entered a Discord Guild / Server ID into the channel ID field
-        if target_ch_id:
+        if target_ch_id and callable(getattr(client, "get_guild", None)):
             guild_match = client.get_guild(target_ch_id)
             if guild_match is not None:
                 BotLogger.log(

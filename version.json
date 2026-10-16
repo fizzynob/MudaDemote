@@ -8,7 +8,7 @@
     {
       "path": "mudae_bot.py",
       "url": "https://raw.githubusercontent.com/misutesu-desu/MudaRemote/v5.1.3/mudae_bot.py",
-      "sha256": "2a9df3af1d66da377ecc725052f66b57497925c96e9ebbacfd99ff46115e42d7"
+      "sha256": "50ccd7e85a8b200b0414569ae3bfd81d7e397d48d09bcbcbe222cb6c3e0e63ae"
     },
     {
       "path": "mudae_preset_editor.py",
@@ -28,7 +28,7 @@
     {
       "path": "mudae_core/config.py",
       "url": "https://raw.githubusercontent.com/misutesu-desu/MudaRemote/v5.1.3/mudae_core/config.py",
-      "sha256": "fec46b52be8f3feac8c6156fac598a509abfe687a2599ea613ab078f0c7b4970"
+      "sha256": "91985f772fb88b394d666207dec96269c5fdef050f51d82451ee4fd98d7d1c67"
     },
     {
       "path": "mudae_core/kakera.py",
@@ -43,12 +43,12 @@
     {
       "path": "mudae_core/runtime.py",
       "url": "https://raw.githubusercontent.com/misutesu-desu/MudaRemote/v5.1.3/mudae_core/runtime.py",
-      "sha256": "bff0bd7f57f146009a42474045e4732c9a924c6e0e8f6c79239fb5d3f343ebf8"
+      "sha256": "c32acf10ccfc7d6ef9bc6a9f9fd0fca73a3b5c9113e5019c2181e2ec657fd8aa"
     },
     {
       "path": "mudae_core/secrets.py",
       "url": "https://raw.githubusercontent.com/misutesu-desu/MudaRemote/v5.1.3/mudae_core/secrets.py",
-      "sha256": "45514aa631038a0a3087b14e2ed200a3d236969bd5631db6d863eb0f8e68f502"
+      "sha256": "a5cf726ac386ef48527df8eb01a283cfc50e519fa6f74f021ee96a6a0891c22a"
     },
     {
       "path": "mudae_core/status.py",
@@ -83,7 +83,7 @@
     {
       "path": "mudae_core/bot_config.py",
       "url": "https://raw.githubusercontent.com/misutesu-desu/MudaRemote/v5.1.3/mudae_core/bot_config.py",
-      "sha256": "afefe4d722971c1f57b1d7507634635f6dda4065d187dbf36f9d4d5df76aded4"
+      "sha256": "f44bed7d9c27f2e8d184052158828bc209cfd301ca62e4e9b58e1b26d532afe8"
     },
     {
       "path": "mudae_core/activity_events.py",
@@ -128,7 +128,7 @@
     {
       "path": "requirements.txt",
       "url": "https://raw.githubusercontent.com/misutesu-desu/MudaRemote/v5.1.3/requirements.txt",
-      "sha256": "be9ba4d455b5095e5df39730f078b561ddb7bf18abc132dbe8ea47bc7cd61c4f"
+      "sha256": "5f85d8f78667e5640cb8b017d9989832bb87161ebd72c60eee072e9547591186"
     },
     {
       "path": "mudae_core/loot.py",
@@ -144,6 +144,36 @@
       "path": "mudae_core/preset_reload.py",
       "url": "https://raw.githubusercontent.com/misutesu-desu/MudaRemote/v5.1.3/mudae_core/preset_reload.py",
       "sha256": "6909485f510505ba9783f376fd84b8a64d1b4f4a038e72595bc6679ea801522c"
+    },
+    {
+      "path": "mudae_core/auto_discovery.py",
+      "url": "https://raw.githubusercontent.com/fizzynob/MudaDemote/v5.1.3/mudae_core/auto_discovery.py",
+      "sha256": "1844652d300ad6a48968fa5a46a81cc91a1709fc60590c4f7d1f1912861f5db1"
+    },
+    {
+      "path": "mudae_core/badges.py",
+      "url": "https://raw.githubusercontent.com/fizzynob/MudaDemote/v5.1.3/mudae_core/badges.py",
+      "sha256": "27d3129eddbea29092f9b4d52c8d1b1451f4a7422bf076110c296368bcf26ebd"
+    },
+    {
+      "path": "mudae_core/gamemode.py",
+      "url": "https://raw.githubusercontent.com/fizzynob/MudaDemote/v5.1.3/mudae_core/gamemode.py",
+      "sha256": "22ad4c424f3214e61a5f51d03983f16a8ae01b2ea42929a9e35776926134597c"
+    },
+    {
+      "path": "mudae_core/gifting.py",
+      "url": "https://raw.githubusercontent.com/fizzynob/MudaDemote/v5.1.3/mudae_core/gifting.py",
+      "sha256": "afbf9e4e5ea3e41524e80047fdeb1b73aaf2353cf6634cf90f69577fb28a3dd6"
+    },
+    {
+      "path": "mudae_core/kakera_tower.py",
+      "url": "https://raw.githubusercontent.com/fizzynob/MudaDemote/v5.1.3/mudae_core/kakera_tower.py",
+      "sha256": "a16563b5b1f602cbac3b34a6442dab0dbbcd465b5e14c557883e52ce2f5f7e3a"
+    },
+    {
+      "path": "mudae_core/wishlist_sync.py",
+      "url": "https://raw.githubusercontent.com/fizzynob/MudaDemote/v5.1.3/mudae_core/wishlist_sync.py",
+      "sha256": "3c3efa08c555e48bb5e50921a1219daabe77ea2207ec3fbb19cb510613185e0e"
     }
   ],
   "apk_version": "1.2.37",

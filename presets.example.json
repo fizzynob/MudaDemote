@@ -149,7 +149,7 @@
     "auto_give_characters_enabled": false,
     "auto_give_kakera_enabled": false,
     "auto_give_kakera_threshold": 5000,
-    "auto_limroul_enabled": true,
+    "auto_limroul_enabled": false,
 
     "target_guild_id": null,
     "allowed_guild_ids": null,

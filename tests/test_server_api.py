@@ -132,6 +132,45 @@ async def test_server_status_and_presets_api(test_context):
         stop_res = await resp_stop.json()
         assert stop_res["success"] is True
 
+        # Test preset creation, selection, and deletion
+        resp_new_preset = await client.post("/api/presets", json={
+            "name": "SecondPreset",
+            "data": {"token": "tok2", "channel_id": "55555"},
+        })
+        assert resp_new_preset.status == 200
+
+        resp_sel = await client.post("/api/presets/select", json={"name": "SecondPreset"})
+        assert resp_sel.status == 200
+        sel_data = await resp_sel.json()
+        assert sel_data["active_preset"] == "SecondPreset"
+
+        resp_del = await client.post("/api/presets/delete", json={"name": "SecondPreset"})
+        assert resp_del.status == 200
+        del_data = await resp_del.json()
+        assert del_data["success"] is True
+
+        # Test POST /api/bot/pause and /api/actions/wake with active bot client
+        woke_flag = {"called": False}
+        mock_bot = SimpleNamespace(
+            is_ready=lambda: True,
+            is_paused=False,
+            _runtime_state_event=SimpleNamespace(set=lambda: None),
+            _immediate_check_event=SimpleNamespace(set=lambda: woke_flag.__setitem__("called", True)),
+        )
+        test_context.bot_client = mock_bot
+
+        resp_pause = await client.post("/api/bot/pause")
+        assert resp_pause.status == 200
+        pause_data = await resp_pause.json()
+        assert pause_data["success"] is True
+        assert pause_data["paused"] is True
+
+        resp_wake = await client.post("/api/actions/wake")
+        assert resp_wake.status == 200
+        wake_data = await resp_wake.json()
+        assert wake_data["success"] is True
+
     finally:
         await client.close()
+
 

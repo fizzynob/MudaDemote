@@ -12,6 +12,16 @@ import signal
 import sys
 from aiohttp import web
 
+# Configure UTF-8 console output for cross-platform support (Windows/Linux/EC2)
+if sys.platform == "win32":
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 # Maximum performance async event loop optimization for Linux / AWS EC2
 if sys.platform != "win32":
     try:
@@ -64,7 +74,7 @@ async def main():
         atomic_write_json(presets_path, default_data)
 
     print(f"=========================================================")
-    print(f"⚡ MudaDemote | Server Edition (Headless & Web Dashboard)")
+    print(f">> MudaDemote | Server Edition (Headless & Web Dashboard)")
     print(f"=========================================================")
     print(f"Base Directory: {base_dir}")
     print(f"Presets File:   {presets_path}")

@@ -130,11 +130,16 @@ class ServerDiscovery:
                 break
 
         eligible_channels = []
+        me = getattr(guild, "me", None)
+        if me is None and hasattr(guild, "get_member") and getattr(client, "user", None):
+            me = guild.get_member(client.user.id)
+
         for ch in getattr(guild, "text_channels", []) or []:
             try:
-                perms = ch.permissions_for(guild.me)
-                if not (perms.read_messages and perms.send_messages and perms.read_message_history):
-                    continue
+                if me is not None:
+                    perms = ch.permissions_for(me)
+                    if not (perms.read_messages and perms.send_messages and perms.read_message_history):
+                        continue
                 score, role = score_channel_name(ch.name)
                 eligible_channels.append({
                     "id": str(ch.id),
@@ -144,6 +149,17 @@ class ServerDiscovery:
                 })
             except Exception:
                 continue
+
+        # If eligible_channels is empty (e.g. member cache not yet populated), fallback to all text channels
+        if not eligible_channels and getattr(guild, "text_channels", None):
+            for ch in guild.text_channels:
+                score, role = score_channel_name(ch.name)
+                eligible_channels.append({
+                    "id": str(ch.id),
+                    "name": ch.name,
+                    "score": score,
+                    "role": role,
+                })
 
         eligible_channels.sort(key=lambda c: c["score"], reverse=True)
 
@@ -159,6 +175,8 @@ class ServerDiscovery:
                 recommended_cmd = roll_candidates[1]
         elif eligible_channels:
             recommended_roll = eligible_channels[0]
+            if len(eligible_channels) > 1 and not cmd_candidates:
+                recommended_cmd = eligible_channels[1]
 
         if cmd_candidates and not recommended_cmd:
             recommended_cmd = cmd_candidates[0]

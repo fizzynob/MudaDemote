@@ -3119,8 +3119,10 @@ def run_bot(preset_name, preset_data, log_function=print_log):
             target_ch_id = None
 
         # Check if the user entered a Discord Guild / Server ID into the channel ID field
-        if target_ch_id and callable(getattr(client, "get_guild", None)):
-            guild_match = client.get_guild(target_ch_id)
+        if target_ch_id and (callable(getattr(client, "get_guild", None)) or hasattr(client, "guilds")):
+            guild_match = client.get_guild(target_ch_id) if callable(getattr(client, "get_guild", None)) else None
+            if guild_match is None and hasattr(client, "guilds"):
+                guild_match = next((g for g in client.guilds if g.id == target_ch_id), None)
             if guild_match is not None:
                 BotLogger.log(
                     f"Notice: Configured ID {target_ch_id} is Discord server '{guild_match.name}'. "
@@ -3245,8 +3247,21 @@ def run_bot(preset_name, preset_data, log_function=print_log):
                 BotLogger.log("Forcedivorce channel config failed. Falling back to roll channel.", preset_name, "WARN")
 
         if client.rolling_enabled or client.loot_automation is not None:
-            if not channel.permissions_for(channel.guild.me).send_messages:
-                BotLogger.log("No Send Permissions in roll channel", preset_name, "ERROR"); await client.close(); return
+            can_send = True
+            guild = getattr(channel, "guild", None)
+            if guild is not None:
+                me = getattr(guild, "me", None)
+                if me is None and hasattr(guild, "get_member") and getattr(client, "user", None):
+                    me = guild.get_member(client.user.id)
+                if me is not None:
+                    try:
+                        can_send = bool(channel.permissions_for(me).send_messages)
+                    except Exception:
+                        can_send = True
+            if not can_send:
+                BotLogger.log("No Send Permissions in roll channel", preset_name, "ERROR")
+                await client.close()
+                return
 
         manual_start_delay = max(0.0, float(start_delay))
         automated_startup_stagger = max(
@@ -3282,15 +3297,16 @@ def run_bot(preset_name, preset_data, log_function=print_log):
             return
 
         if client.rolling_enabled:
-            if not client.skip_initial_commands:
+            if not client.skip_initial_commands and getattr(client, "auto_limroul_enabled", False):
                 cmd_ch = _get_command_channel() or channel
                 try:
-                    if not await guarded_send(cmd_ch, f"{client.mudae_prefix}limroul 1 1 1 1"):
-                        return
-                    if not await active_delay(1.0 + random.uniform(0.1, 0.4)):
-                        return
+                    sent = await guarded_send(cmd_ch, f"{client.mudae_prefix}limroul 1 1 1 1")
+                    if not sent:
+                        BotLogger.log("Notice: limroul command skipped or unacknowledged.", preset_name, "INFO")
+                    else:
+                        await active_delay(1.0 + random.uniform(0.1, 0.4))
                 except Exception as e:
-                    BotLogger.log(f"Setup error: {e}", preset_name, "ERROR"); await client.close(); return
+                    BotLogger.log(f"Notice: limroul command error: {e}", preset_name, "WARN")
             client._main_loop_task = client.loop.create_task(main_status_loop(client, channel))
             if client.scheduled_roll_times and client._scheduled_roll_task is None:
                 client._scheduled_roll_task = client.loop.create_task(scheduled_roll_task(channel))

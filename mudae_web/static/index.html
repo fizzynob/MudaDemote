@@ -23,7 +23,9 @@
         </div>
 
         <div class="preset-dropdown-wrap">
-          <select id="presetSelect" class="ptero-select"></select>
+          <select id="presetSelect" class="ptero-select" title="select preset"></select>
+          <button id="btnNewPreset" class="btn-ptero-subtle btn-xs" title="create new preset">+ new</button>
+          <button id="btnDeletePreset" class="btn-ptero-subtle btn-xs" title="delete active preset">delete</button>
         </div>
       </div>
 
@@ -45,8 +47,9 @@
 
         <!-- Pterodactyl Power Buttons -->
         <div class="power-buttons">
-          <button id="btnPowerStart" class="btn-power btn-start" title="start bot">start</button>
-          <button id="btnPowerRestart" class="btn-power btn-restart" title="restart bot">restart</button>
+          <button id="btnPowerStart" class="btn-power btn-start" title="start or resume bot">start</button>
+          <button id="btnPowerPause" class="btn-power btn-pause" title="pause or resume rolling">pause</button>
+          <button id="btnPowerRestart" class="btn-power btn-restart" title="reload config & restart bot">restart</button>
           <button id="btnPowerStop" class="btn-power btn-stop" title="stop bot">stop</button>
         </div>
       </div>
@@ -70,6 +73,13 @@
           <line x1="16" y1="17" x2="8" y2="17"></line>
         </svg>
         <span>configs</span>
+      </button>
+
+      <button class="subnav-tab" data-tab="tab-wishlist">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+        </svg>
+        <span>wishlist &amp; snipe</span>
       </button>
 
       <button class="subnav-tab" data-tab="tab-automation">
@@ -122,6 +132,7 @@
             <div class="metric-bar-bg">
               <div id="metricPowerBar" class="metric-bar-fill" style="width: 0%;"></div>
             </div>
+            <div id="metricPowerSub" class="metric-sub">click cost: -- • session: 0k</div>
           </div>
         </div>
 
@@ -150,10 +161,10 @@
         <div class="metric-card">
           <div class="metric-top">
             <span class="metric-title">server allocation</span>
-            <span class="metric-badge">active</span>
+            <span id="metricActivityBadge" class="metric-badge">idle</span>
           </div>
           <div class="metric-value-wrap">
-            <div id="metricGuildName" class="metric-val truncate">--</div>
+            <div id="metricGuildName" class="metric-val truncate">disconnected</div>
             <div id="metricChannelName" class="metric-sub truncate">channel: --</div>
           </div>
         </div>
@@ -169,14 +180,27 @@
               <span class="dot green"></span>
             </span>
             <span class="terminal-path">console:~/mudademote$</span>
+            <div class="terminal-filters">
+              <button class="filter-pill active" data-filter="all">all</button>
+              <button class="filter-pill" data-filter="claim">claims</button>
+              <button class="filter-pill" data-filter="kakera">kakera</button>
+              <button class="filter-pill" data-filter="warn">warn/err</button>
+              <button class="filter-pill" data-filter="system">system</button>
+            </div>
           </div>
           <div class="terminal-actions">
-            <button class="chip-action" data-cmd="$tu">$tu</button>
-            <button class="chip-action" data-cmd="$wll">$wll</button>
-            <button class="chip-action" data-cmd="$dk">$dk</button>
-            <button class="chip-action" data-cmd="$rolls">$rolls</button>
-            <button class="chip-action" data-cmd="$p">$p</button>
-            <button id="btnClearConsole" class="chip-clear">clear</button>
+            <input type="text" id="terminalSearchInput" class="terminal-search" placeholder="search logs...">
+            <button id="btnWakeLoop" class="chip-action chip-accent" title="force immediate status/roll cycle">wake loop</button>
+            <button class="chip-action" data-cmd="$tu" title="check timers ($tu)">$tu</button>
+            <button class="chip-action" data-cmd="$wll" title="sync wishlist ($wll)">$wll</button>
+            <button class="chip-action" data-cmd="$dk" title="daily kakera ($dk)">$dk</button>
+            <button class="chip-action" data-cmd="$daily" title="daily rolls ($daily)">$daily</button>
+            <button class="chip-action" data-cmd="$rolls" title="use $rolls">$rolls</button>
+            <button class="chip-action" data-cmd="$p" title="pokéslot ($p)">$p</button>
+            <button class="chip-action" data-cmd="$mk" title="marry kakera ($mk)">$mk</button>
+            <button id="btnAutoScroll" class="chip-action active" title="toggle auto-scroll">auto-scroll</button>
+            <button id="btnExportLogs" class="chip-clear" title="download console logs">export</button>
+            <button id="btnClearConsole" class="chip-clear" title="clear terminal">clear</button>
           </div>
         </div>
 
@@ -187,8 +211,31 @@
         <!-- Terminal Command Input Bar -->
         <div class="terminal-input-bar">
           <span class="prompt-arrow">&gt;</span>
-          <input type="text" id="terminalCmdInput" class="terminal-input" placeholder="type a command (e.g. $tu, $wll, $dk, $rolls) and press enter...">
+          <input type="text" id="terminalCmdInput" class="terminal-input" placeholder="type any mudae command (e.g. $tu, $wll, $dk, $wa, $im rem) and press enter (up/down for history)...">
           <button id="btnTerminalSend" class="btn-terminal-send">send</button>
+        </div>
+      </section>
+
+      <!-- Live Session Activity (Claims & Kakera Feed) -->
+      <section class="session-activity-grid mt-3">
+        <div class="ptero-card compact-card">
+          <div class="compact-header">
+            <h3>recent character claims</h3>
+            <span id="badgeSessionClaims" class="status-pill pill-allowed">0 claimed</span>
+          </div>
+          <div id="recentClaimsList" class="activity-feed-list">
+            <div class="feed-empty">no character claims recorded in this session yet.</div>
+          </div>
+        </div>
+
+        <div class="ptero-card compact-card">
+          <div class="compact-header">
+            <h3>recent kakera collections</h3>
+            <span id="badgeSessionKakera" class="status-pill pill-mudae">0 kakera</span>
+          </div>
+          <div id="recentKakeraList" class="activity-feed-list">
+            <div class="feed-empty">no kakera reactions collected in this session yet.</div>
+          </div>
         </div>
       </section>
     </main>
@@ -199,7 +246,7 @@
         <div class="card-header-bar">
           <div class="header-titles">
             <h2>configuration manager</h2>
-            <p>edit preset properties or modify the raw json specification directly.</p>
+            <p>edit core connection, rolling, claiming, and humanization settings or modify the raw json directly.</p>
           </div>
           <div class="view-toggles">
             <button id="btnToggleVisual" class="btn-toggle active">visual editor</button>
@@ -209,77 +256,359 @@
 
         <!-- Visual Form Mode -->
         <div id="configVisualView" class="config-view active">
+          <div class="config-section-label">connection &amp; channels</div>
           <div class="ptero-form-grid">
             <div class="form-field">
-              <label>discord token</label>
-              <input type="password" id="cfgToken" class="ptero-input" placeholder="user account token">
+              <label>discord user token (no quotes needed)</label>
+              <div class="input-with-btn">
+                <input type="password" id="cfgToken" class="ptero-input w-full" placeholder="paste discord account token">
+                <button type="button" id="btnToggleTokenVis" class="btn-ptero-subtle">show</button>
+              </div>
             </div>
 
             <div class="form-field">
-              <label>roll channel id (or server id / 'auto')</label>
-              <input type="text" id="cfgChannelId" class="ptero-input" placeholder="channel id, server id, or 'auto'">
+              <label>roll channel id (channel id, server id, or 'auto')</label>
+              <input type="text" id="cfgChannelId" class="ptero-input" placeholder="e.g. 123456789012345678 or auto">
             </div>
 
             <div class="form-field">
-              <label>command channel id (optional)</label>
-              <input type="text" id="cfgCmdChannelId" class="ptero-input" placeholder="silent command channel id">
+              <label>silent command channel id (optional)</label>
+              <input type="text" id="cfgCmdChannelId" class="ptero-input" placeholder="leave blank to use roll channel">
             </div>
 
+            <div class="form-field">
+              <label>mudae bot prefix</label>
+              <input type="text" id="cfgMudaePrefix" class="ptero-input" value="$" placeholder="$">
+            </div>
+          </div>
+
+          <div class="config-section-label mt-3">rolling &amp; claim thresholds</div>
+          <div class="ptero-form-grid">
             <div class="form-field">
               <label>roll command</label>
-              <input type="text" id="cfgRollCommand" class="ptero-input" value="wa">
+              <select id="cfgRollCommand" class="ptero-select">
+                <option value="wa">$wa (animanga women)</option>
+                <option value="ha">$ha (animanga men)</option>
+                <option value="wg">$wg (game women)</option>
+                <option value="hg">$hg (game men)</option>
+                <option value="ma">$ma (all animanga)</option>
+                <option value="mg">$mg (all game)</option>
+                <option value="w">$w (all women)</option>
+                <option value="h">$h (all men)</option>
+                <option value="m">$m (marry all)</option>
+              </select>
             </div>
 
             <div class="form-field">
               <label>minimum kakera to claim</label>
-              <input type="number" id="cfgMinKakera" class="ptero-input" value="100">
+              <input type="number" id="cfgMinKakera" class="ptero-input" value="100" min="0">
             </div>
 
             <div class="form-field">
-              <label>roll speed (seconds)</label>
-              <input type="number" step="0.1" id="cfgRollSpeed" class="ptero-input" value="0.4">
+              <label>max claim rank threshold (0 = disabled)</label>
+              <input type="number" id="cfgMaxClaimRank" class="ptero-input" value="0" min="0" placeholder="e.g. 500">
+            </div>
+
+            <div class="form-field">
+              <label>max like rank threshold (0 = disabled)</label>
+              <input type="number" id="cfgMaxLikeRank" class="ptero-input" value="0" min="0" placeholder="e.g. 300">
+            </div>
+
+            <div class="form-field">
+              <label>roll speed (seconds between rolls)</label>
+              <input type="number" step="0.05" id="cfgRollSpeed" class="ptero-input" value="0.4" min="0.1">
             </div>
 
             <div class="form-field">
               <label>claim reset interval (minutes)</label>
-              <input type="number" id="cfgClaimInterval" class="ptero-input" value="180">
+              <input type="number" id="cfgClaimInterval" class="ptero-input" value="180" min="30">
             </div>
 
             <div class="form-field">
               <label>roll reset interval (minutes)</label>
-              <input type="number" id="cfgRollInterval" class="ptero-input" value="60">
+              <input type="number" id="cfgRollInterval" class="ptero-input" value="60" min="15">
             </div>
+
+            <div class="form-field">
+              <label>startup delay (seconds)</label>
+              <input type="number" id="cfgStartDelay" class="ptero-input" value="0" min="0">
+            </div>
+          </div>
+
+          <div class="config-section-label mt-3">core gameplay &amp; rolling behavior</div>
+          <div class="ptero-toggles-grid">
+            <label class="ptero-checkbox-card">
+              <input type="checkbox" id="cfgRollingEnabled" checked>
+              <div>
+                <strong>enable active rolling</strong>
+                <span>send roll commands ($wa, $ha, etc.) on schedule</span>
+              </div>
+            </label>
+
+            <label class="ptero-checkbox-card">
+              <input type="checkbox" id="cfgUseSlashRolls">
+              <div>
+                <strong>use slash rolls (/wa, /ha)</strong>
+                <span>send discord slash commands for +10% wish/kakera bonus</span>
+              </div>
+            </label>
+
+            <label class="ptero-checkbox-card">
+              <input type="checkbox" id="cfgTimeRollsToReset">
+              <div>
+                <strong>double-claim timing mode</strong>
+                <span>hold rolls until right before claim reset for back-to-back claims</span>
+              </div>
+            </label>
+
+            <label class="ptero-checkbox-card">
+              <input type="checkbox" id="cfgKeyMode">
+              <div>
+                <strong>key farming mode</strong>
+                <span>keep rolling even when claim is on cooldown to farm keys &amp; kakera</span>
+              </div>
+            </label>
+
+            <label class="ptero-checkbox-card">
+              <input type="checkbox" id="cfgLurkerMode">
+              <div>
+                <strong>lurker / passive snipe mode</strong>
+                <span>never send commands; only watch channels and click claims/kakera</span>
+              </div>
+            </label>
+
+            <label class="ptero-checkbox-card">
+              <input type="checkbox" id="cfgReactiveSnipeOwnRolls" checked>
+              <div>
+                <strong>instant reactive claim on own rolls</strong>
+                <span>immediately claim wishes &amp; high-value characters mid-roll batch</span>
+              </div>
+            </label>
+
+            <label class="ptero-checkbox-card">
+              <input type="checkbox" id="cfgAutoFreeClaim" checked>
+              <div>
+                <strong>auto free-claim ($fc)</strong>
+                <span>automatically trigger free claim buttons when available</span>
+              </div>
+            </label>
+
+            <label class="ptero-checkbox-card">
+              <input type="checkbox" id="cfgAutoRtAfterClaim">
+              <div>
+                <strong>auto $rt after claim</strong>
+                <span>use $rt to reset claim timer when a high-value target appears</span>
+              </div>
+            </label>
+
+            <label class="ptero-checkbox-card">
+              <input type="checkbox" id="cfgHumanizationEnabled">
+              <div>
+                <strong>humanization jitter</strong>
+                <span>add natural random timing jitter and occasional micro-breaks</span>
+              </div>
+            </label>
+
+            <label class="ptero-checkbox-card">
+              <input type="checkbox" id="cfgAutoRollsEnabled" checked>
+              <div>
+                <strong>auto $rolls command</strong>
+                <span>automatically replenish rolls with $rolls when out of rolls</span>
+              </div>
+            </label>
+
+            <label class="ptero-checkbox-card">
+              <input type="checkbox" id="cfgAutoMkEnabled">
+              <div>
+                <strong>auto $mk (marry kakera)</strong>
+                <span>automatically dispatch bonus $mk rolls when available in $tu</span>
+              </div>
+            </label>
+
+            <label class="ptero-checkbox-card">
+              <input type="checkbox" id="cfgAutoUsEnabled">
+              <div>
+                <strong>auto $us (extra roll stacks)</strong>
+                <span>automatically consume stored $us rolls when appropriate</span>
+              </div>
+            </label>
           </div>
         </div>
 
         <!-- Raw JSON Mode -->
         <div id="configRawView" class="config-view">
+          <div class="raw-toolbar">
+            <span class="field-hint">edit full preset json schema directly. changes hot-reload into the active instance on save.</span>
+            <button id="btnFormatJson" class="btn-ptero-subtle btn-xs">format json</button>
+          </div>
           <textarea id="rawJsonEditor" class="ptero-code-editor" spellcheck="false"></textarea>
         </div>
 
         <div class="card-footer-bar">
-          <button id="btnSaveConfig" class="btn-ptero-primary">save content</button>
+          <button id="btnSaveAndRestartConfig" class="btn-ptero-secondary">save &amp; restart bot</button>
+          <button id="btnSaveConfig" class="btn-ptero-primary">save content (live reload)</button>
         </div>
       </div>
     </main>
 
-    <!-- 3. AUTOMATION TAB -->
+    <!-- 3. WISHLIST & SNIPE TAB -->
+    <main id="tab-wishlist" class="tab-pane">
+      <div class="ptero-card">
+        <div class="card-header-bar">
+          <div class="header-titles">
+            <h2>wishlist, series &amp; sniping manager</h2>
+            <p>manage priority characters, series wishlists, avoid filters, and external snipe rules.</p>
+          </div>
+          <div class="header-actions">
+            <button id="btnQuickSyncWlTab" class="btn-ptero-secondary">trigger $wll sync on discord</button>
+          </div>
+        </div>
+
+        <div class="wishlist-manager-grid">
+          <!-- Character Wishlist -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>character wishlist (<span id="countWishlistChars">0</span>)</h3>
+                <p>characters on this list are claimed immediately regardless of kakera value.</p>
+              </div>
+              <button id="btnClearWishlistChars" class="btn-ptero-subtle btn-xs">clear all</button>
+            </div>
+            <div class="chip-input-row">
+              <input type="text" id="inputAddWishlistChar" class="ptero-input-sm flex-1" placeholder="add character name (or paste $wl output)...">
+              <button id="btnAddWishlistChar" class="btn-ptero-secondary btn-xs">add</button>
+            </div>
+            <div id="chipsWishlistChars" class="chips-container"></div>
+          </div>
+
+          <!-- Series Wishlist -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>series wishlist (<span id="countSeriesWishlist">0</span>)</h3>
+                <p>any character belonging to these series will be prioritized for claiming/sniping.</p>
+              </div>
+              <button id="btnClearSeriesWishlist" class="btn-ptero-subtle btn-xs">clear all</button>
+            </div>
+            <div class="chip-input-row">
+              <input type="text" id="inputAddSeriesWishlist" class="ptero-input-sm flex-1" placeholder="add anime/game series name...">
+              <button id="btnAddSeriesWishlist" class="btn-ptero-secondary btn-xs">add</button>
+            </div>
+            <div id="chipsSeriesWishlist" class="chips-container"></div>
+          </div>
+
+          <!-- Avoid / Blacklist -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>avoid character list (<span id="countAvoidChars">0</span>)</h3>
+                <p>characters on this list will never be claimed even if they exceed min kakera.</p>
+              </div>
+              <button id="btnClearAvoidChars" class="btn-ptero-subtle btn-xs">clear all</button>
+            </div>
+            <div class="chip-input-row">
+              <input type="text" id="inputAddAvoidChar" class="ptero-input-sm flex-1" placeholder="add character to ignore...">
+              <button id="btnAddAvoidChar" class="btn-ptero-secondary btn-xs">add</button>
+            </div>
+            <div id="chipsAvoidChars" class="chips-container"></div>
+          </div>
+        </div>
+
+        <div class="config-section-label mt-3">external character &amp; kakera sniping</div>
+        <div class="ptero-form-grid">
+          <div class="form-field">
+            <label>character snipe Delay (seconds)</label>
+            <input type="number" step="0.1" id="cfgSnipeDelay" class="ptero-input" value="2.0" min="0">
+          </div>
+
+          <div class="form-field">
+            <label>series snipe delay (seconds)</label>
+            <input type="number" step="0.1" id="cfgSeriesSnipeDelay" class="ptero-input" value="3.0" min="0">
+          </div>
+
+          <div class="form-field">
+            <label>kakera snipe min power threshold (%)</label>
+            <input type="number" id="cfgKakeraSnipeThreshold" class="ptero-input" value="0" min="0" max="100">
+          </div>
+        </div>
+
+        <div class="ptero-toggles-grid mt-2">
+          <label class="ptero-checkbox-card">
+            <input type="checkbox" id="cfgSnipeMode">
+            <div>
+              <strong>enable external character sniping</strong>
+              <span>snipe wished &amp; high-kakera characters rolled by other users</span>
+            </div>
+          </label>
+
+          <label class="ptero-checkbox-card">
+            <input type="checkbox" id="cfgSeriesSnipeMode">
+            <div>
+              <strong>enable external series sniping</strong>
+              <span>snipe characters from your series wishlist rolled by other users</span>
+            </div>
+          </label>
+
+          <label class="ptero-checkbox-card">
+            <input type="checkbox" id="cfgSnipeIgnoreMinKakera">
+            <div>
+              <strong>ignore min kakera on external snipe</strong>
+              <span>only snipe characters that match wishlist or rank criteria</span>
+            </div>
+          </label>
+
+          <label class="ptero-checkbox-card">
+            <input type="checkbox" id="cfgKakeraSnipeMode">
+            <div>
+              <strong>enable external kakera sniping</strong>
+              <span>click kakera reactions on characters rolled by other users</span>
+            </div>
+          </label>
+
+          <label class="ptero-checkbox-card">
+            <input type="checkbox" id="cfgCollectPurpleKakera" checked>
+            <div>
+              <strong>always collect purple kakera</strong>
+              <span>click zero-cost purple kakera even when kakera power is low</span>
+            </div>
+          </label>
+
+          <label class="ptero-checkbox-card">
+            <input type="checkbox" id="cfgImmediateKakeraClick" checked>
+            <div>
+              <strong>fast kakera reaction clicking</strong>
+              <span>click kakera buttons with minimal delay</span>
+            </div>
+          </label>
+        </div>
+
+        <div class="card-footer-bar">
+          <button id="btnSaveWishlistTab" class="btn-ptero-primary">save wishlist &amp; snipe settings</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- 4. AUTOMATION TAB -->
     <main id="tab-automation" class="tab-pane">
       <div class="ptero-card">
         <div class="card-header-bar">
           <div class="header-titles">
             <h2>mudae automation suite</h2>
-            <p>enable, tune, and monitor modular gameplay automation routines.</p>
+            <p>enable, tune, and trigger modular gameplay automation engines. all changes hot-reload into the active bot on save.</p>
+          </div>
+          <div class="header-actions">
+            <button id="btnSaveAutomationTop" class="btn-ptero-primary">save automation settings</button>
           </div>
         </div>
 
+        <div class="config-section-label">progression &amp; economy automation</div>
         <div class="automation-cards-grid">
-          <!-- Auto Badges -->
+          <!-- 1. Auto Badges -->
           <div class="feature-box">
             <div class="feature-box-top">
               <div class="feature-box-info">
                 <h3>auto-badges ($badge)</h3>
-                <p>buys badges in mathematically optimal cost-efficiency order (ruby 4 discount rush).</p>
+                <p>buys bronze/silver/gold/sapphire/ruby/emerald badges in optimal cost order (ruby iv rush).</p>
               </div>
               <label class="switch">
                 <input type="checkbox" id="chkAutoBadges">
@@ -290,8 +619,8 @@
               <div class="ctrl-group">
                 <label>progression strategy</label>
                 <select id="selBadgeStrategy" class="ptero-select-sm">
-                  <option value="optimal">optimal (ruby 4 discount rush)</option>
-                  <option value="balanced">balanced</option>
+                  <option value="optimal">optimal (ruby iv discount rush)</option>
+                  <option value="balanced">balanced tier progression</option>
                 </select>
               </div>
               <div class="ctrl-group">
@@ -303,15 +632,16 @@
                   <option value="1">tier i</option>
                 </select>
               </div>
+              <button type="button" class="btn-ptero-subtle btn-xs mt-2 chip-action" data-cmd="$k">check $k kakera &amp; badges</button>
             </div>
           </div>
 
-          <!-- Kakera Tower -->
+          <!-- 2. Kakera Tower -->
           <div class="feature-box">
             <div class="feature-box-top">
               <div class="feature-box-info">
                 <h3>kakera tower ($kt, $build)</h3>
-                <p>automatically constructs tower floors once badges are maxed.</p>
+                <p>automatically builds kakera tower floors when your kakera balance covers the next floor cost.</p>
               </div>
               <label class="switch">
                 <input type="checkbox" id="chkAutoTower">
@@ -321,17 +651,243 @@
             <div class="feature-box-controls">
               <div class="ctrl-group">
                 <label>maximum target floors</label>
-                <input type="number" id="numTowerMaxFloors" class="ptero-input-sm" min="1" max="50" value="10">
+                <input type="number" id="numTowerMaxFloors" class="ptero-input-sm" min="1" max="50" value="12">
+              </div>
+              <button type="button" class="btn-ptero-subtle btn-xs mt-2 chip-action" data-cmd="$kt">inspect tower ($kt)</button>
+            </div>
+          </div>
+
+          <!-- 3. Kakera Loots & Auto-Release Pins ($kl / $arlp / $givescrap) -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>kakera loots &amp; pin release ($kl, $arlp)</h3>
+                <p>automated $kl loop with automatic y/n confirmation and $arlp when duplicate pins cap out.</p>
+              </div>
+            </div>
+            <div class="feature-box-controls">
+              <div class="ctrl-group">
+                <label>loot automation mode</label>
+                <select id="selLootMode" class="ptero-select-sm">
+                  <option value="off">disabled (off)</option>
+                  <option value="kl">auto kakera loots ($kl + auto $arlp)</option>
+                  <option value="scrap">auto give kakera scrap ($givescrap)</option>
+                </select>
+              </div>
+              <div class="ptero-subgrid-2">
+                <div class="ctrl-group">
+                  <label>$kl quantity per batch</label>
+                  <input type="number" id="numKlAmount" class="ptero-input-sm" min="1" value="1000">
+                </div>
+                <div class="ctrl-group">
+                  <label>cooldown range (sec)</label>
+                  <div class="input-with-btn">
+                    <input type="number" id="numLootMinCd" class="ptero-input-sm w-full" min="5" value="30" title="min cooldown">
+                    <input type="number" id="numLootMaxCd" class="ptero-input-sm w-full" min="5" value="40" title="max cooldown">
+                  </div>
+                </div>
+              </div>
+              <div class="ptero-subgrid-2">
+                <div class="ctrl-group">
+                  <label>scrap target user id</label>
+                  <input type="text" id="txtScrapTargetId" class="ptero-input-sm" placeholder="user id for $givescrap">
+                </div>
+                <div class="ctrl-group">
+                  <label>scrap amount</label>
+                  <input type="number" id="numScrapAmount" class="ptero-input-sm" min="1" value="100000">
+                </div>
               </div>
             </div>
           </div>
 
-          <!-- Wishlist Auto-Sync -->
+          <!-- 4. Sphere Mini-Games Solver ($oh, $oc, $oq, $ot) -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>sphere mini-games solver ($oh, $oc, $oq, $ot)</h3>
+                <p>deterministic 5x5 board deduction solver for red/purple spheres and optimal reward collection.</p>
+              </div>
+            </div>
+            <div class="feature-box-controls">
+              <div class="ptero-subgrid-2">
+                <label class="ptero-checkbox">
+                  <input type="checkbox" id="chkAutoOh">
+                  <span>solve $oh (harvest)</span>
+                </label>
+                <label class="ptero-checkbox">
+                  <input type="checkbox" id="chkAutoOc">
+                  <span>solve $oc (chest)</span>
+                </label>
+                <label class="ptero-checkbox">
+                  <input type="checkbox" id="chkAutoOq">
+                  <span>solve $oq (quest)</span>
+                </label>
+                <label class="ptero-checkbox">
+                  <input type="checkbox" id="chkAutoOt">
+                  <span>solve $ot (tower)</span>
+                </label>
+              </div>
+              <label class="ptero-checkbox mt-2">
+                <input type="checkbox" id="chkOhIndividually">
+                <span>play $oh boards individually (one at a time)</span>
+              </label>
+              <label class="ptero-checkbox">
+                <input type="checkbox" id="chkOcCollectAfterRed" checked>
+                <span>continue collecting $oc rewards after finding red sphere</span>
+              </label>
+              <div class="ctrl-group">
+                <label>$oh unknown explore clicks</label>
+                <input type="number" id="numOhExploreClicks" class="ptero-input-sm" min="0" max="10" value="3">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="config-section-label mt-3">power, roll stacks &amp; kakera optimization</div>
+        <div class="automation-cards-grid">
+          <!-- 5. Smart $dk & Power Management -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>smart $dk &amp; kakera power manager</h3>
+                <p>optimizes $dk usage so kakera power refills only when depleted, preventing wasted power.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chkAutoDk" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="feature-box-controls">
+              <label class="ptero-checkbox">
+                <input type="checkbox" id="chkDkPowerManagement">
+                <span>hold $dk until power drops below max threshold</span>
+              </label>
+              <div class="ptero-subgrid-2">
+                <div class="ctrl-group">
+                  <label>max power to use $dk (%)</label>
+                  <input type="number" id="numMaxDkPower" class="ptero-input-sm" min="0" max="100" value="100">
+                </div>
+                <div class="ctrl-group">
+                  <label>min reserve power (%)</label>
+                  <input type="number" id="numAutoDkMinPower" class="ptero-input-sm" min="0" max="100" value="0">
+                </div>
+              </div>
+              <div class="ctrl-group">
+                <label>scheduled $dk time (optional hh:mm)</label>
+                <input type="text" id="txtDkScheduleTime" class="ptero-input-sm" placeholder="e.g. 08:30">
+              </div>
+            </div>
+          </div>
+
+          <!-- 6. Extra Roll Stacks ($us, $mk, $rolls) -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>roll stack automation ($us, $mk, $rolls)</h3>
+                <p>fine-tune how stored $us rolls, $mk bonus rolls, and $rolls resets are consumed.</p>
+              </div>
+            </div>
+            <div class="feature-box-controls">
+              <div class="ptero-subgrid-2">
+                <div class="ctrl-group">
+                  <label>$us pull limit (0 = auto)</label>
+                  <input type="number" id="numAutoUsLimit" class="ptero-input-sm" min="0" value="0">
+                </div>
+                <div class="ctrl-group">
+                  <label>$rolls item limit (0 = max)</label>
+                  <input type="number" id="numAutoRollsLimit" class="ptero-input-sm" min="0" value="0">
+                </div>
+              </div>
+              <label class="ptero-checkbox mt-2">
+                <input type="checkbox" id="chkAutoUsStopOnClaim" checked>
+                <span>stop pulling $us once a claim is used in cycle</span>
+              </label>
+              <label class="ptero-checkbox">
+                <input type="checkbox" id="chkBulkUsEnabled">
+                <span>use bulk $us command ($us &lt;count&gt;)</span>
+              </label>
+              <label class="ptero-checkbox">
+                <input type="checkbox" id="chkAutoMkFullPowerOnly">
+                <span>only roll $mk when kakera power is at 100%</span>
+              </label>
+              <label class="ptero-checkbox">
+                <input type="checkbox" id="chkAutoRollsOnlyClaimHour">
+                <span>only spend $rolls during claim-available hour</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 7. Kakera Click Filters & Perk Rules -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>kakera perk &amp; chaos key filters</h3>
+                <p>conserve kakera power for high-yield targets, chaos keys (half/zero cost), or starwishes.</p>
+              </div>
+            </div>
+            <div class="feature-box-controls">
+              <label class="ptero-checkbox">
+                <input type="checkbox" id="chkOnlyChaos">
+                <span>only click kakera on characters with chaos keys (10+ keys)</span>
+              </label>
+              <label class="ptero-checkbox">
+                <input type="checkbox" id="chkWishStarwishKakeraOnly">
+                <span>only click kakera on wished / starwished characters</span>
+              </label>
+              <label class="ptero-checkbox">
+                <input type="checkbox" id="chkPerkEightOnly">
+                <span>perk 8 mode (prioritize kakera with bonus rolls)</span>
+              </label>
+              <label class="ptero-checkbox">
+                <input type="checkbox" id="chkShopPerk7Only">
+                <span>shop perk 7 filter</span>
+              </label>
+              <label class="ptero-checkbox">
+                <input type="checkbox" id="chkMkOnly">
+                <span>only click kakera on $mk rolls</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 8. Hybrid Panic Claim & Reset Window -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>panic roll &amp; hybrid instant-claim</h3>
+                <p>dumps remaining rolls before reset and switches to instant claiming during the final minutes.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chkHybridPanicClaim">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="feature-box-controls">
+              <div class="ctrl-group">
+                <label>panic roll window before reset (minutes)</label>
+                <input type="number" id="numPanicRollMinutes" class="ptero-input-sm" min="1" max="30" value="5">
+              </div>
+              <div class="ptero-subgrid-2">
+                <div class="ctrl-group">
+                  <label>instant-claim min kakera</label>
+                  <input type="number" id="numPanicMinKakera" class="ptero-input-sm" min="50" value="300">
+                </div>
+                <div class="ctrl-group">
+                  <label>instant-claim max rank</label>
+                  <input type="number" id="numPanicMaxRank" class="ptero-input-sm" min="1" value="200">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="config-section-label mt-3">harem management, gifting &amp; schedules</div>
+        <div class="automation-cards-grid">
+          <!-- 9. Wishlist Auto-Sync -->
           <div class="feature-box">
             <div class="feature-box-top">
               <div class="feature-box-info">
                 <h3>wishlist auto-sync ($wl, $wll)</h3>
-                <p>imports wishlist from mudae directly into bot claim filters.</p>
+                <p>passively imports your wishlist whenever mudae posts a wishlist embed.</p>
               </div>
               <label class="switch">
                 <input type="checkbox" id="chkAutoWishlistSync">
@@ -339,20 +895,24 @@
               </label>
             </div>
             <div class="feature-box-controls">
-              <label class="ptero-checkbox">
+              <div class="ctrl-group">
+                <label>auto-sync interval (hours)</label>
+                <input type="number" id="numWishlistSyncHours" class="ptero-input-sm" min="1" max="48" value="6">
+              </div>
+              <label class="ptero-checkbox mt-2">
                 <input type="checkbox" id="chkWishlistRemoveClaimed">
                 <span>remove character from wishlist after claim</span>
               </label>
-              <button id="btnSyncWlNow" class="btn-ptero-secondary mt-2">sync wishlist now</button>
+              <button type="button" id="btnSyncWlNow" class="btn-ptero-secondary btn-xs mt-2">sync wishlist now ($wll)</button>
             </div>
           </div>
 
-          <!-- Main Account Gifting -->
+          <!-- 10. Main Account Gifting -->
           <div class="feature-box">
             <div class="feature-box-top">
               <div class="feature-box-info">
                 <h3>main account gifting ($give, $givek)</h3>
-                <p>automatically gifts claimed characters and surplus kakera to main account.</p>
+                <p>automatically transfers claimed characters and surplus kakera to your main account.</p>
               </div>
               <label class="switch">
                 <input type="checkbox" id="chkAutoGiveCharacters">
@@ -361,57 +921,139 @@
             </div>
             <div class="feature-box-controls">
               <div class="ctrl-group">
-                <label>main account discord id</label>
+                <label>main account discord user id</label>
                 <input type="text" id="txtMainAccountId" class="ptero-input-sm" placeholder="e.g. 123456789012345678">
+              </div>
+              <div class="ctrl-group">
+                <label>surplus kakera transfer threshold ($givek)</label>
+                <input type="number" id="numGiveKakeraThreshold" class="ptero-input-sm" min="1000" value="5000">
               </div>
               <label class="ptero-checkbox mt-2">
                 <input type="checkbox" id="chkAutoGiveKakera">
-                <span>auto-gift surplus kakera ($givek)</span>
+                <span>auto-gift surplus kakera ($givek) above threshold</span>
               </label>
             </div>
           </div>
 
-          <!-- Gamemode 2 -->
+          <!-- 11. Auto Divorce Fodder -->
           <div class="feature-box">
             <div class="feature-box-top">
               <div class="feature-box-info">
-                <h3>gamemode 2 pool optimization</h3>
-                <p>auto-enforces $limroul 1 1 1 1 for maximum high-value character rates.</p>
+                <h3>auto-divorce low value claims ($divorce)</h3>
+                <p>divorces fodder characters below kakera threshold for immediate kakera payout.</p>
               </div>
               <label class="switch">
-                <input type="checkbox" id="chkAutoLimroul" checked>
+                <input type="checkbox" id="chkAutoDivorce">
                 <span class="slider"></span>
               </label>
             </div>
+            <div class="feature-box-controls">
+              <div class="ctrl-group">
+                <label>max kakera value to divorce</label>
+                <input type="number" id="numDivorceMaxKakera" class="ptero-input-sm" min="10" max="1000" value="80">
+              </div>
+              <label class="ptero-checkbox mt-2">
+                <input type="checkbox" id="chkDivorceProtectWishes" checked>
+                <span>always protect wished characters from divorce</span>
+              </label>
+            </div>
           </div>
 
-          <!-- Dailies -->
+          <!-- 12. $forcedivorce Character Farming Loop -->
           <div class="feature-box">
             <div class="feature-box-top">
               <div class="feature-box-info">
-                <h3>automated dailies ($daily, $p, $dk)</h3>
-                <p>handles $p, $daily, $dk, and voting reminders on schedule.</p>
+                <h3>$forcedivorce character farming</h3>
+                <p>repeatedly releases target farm characters with $forcedivorce so they can be re-rolled for keys/kakera.</p>
               </div>
               <label class="switch">
+                <input type="checkbox" id="chkFarmCharacterEnabled">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="feature-box-controls">
+              <div class="ctrl-group">
+                <label>farm characters (comma-separated)</label>
+                <input type="text" id="txtFarmCharacters" class="ptero-input-sm" placeholder="e.g. Zero Two, Rem">
+              </div>
+              <div class="ctrl-group">
+                <label>dedicated $forcedivorce channel id (optional)</label>
+                <input type="text" id="txtForcedivorceChannelId" class="ptero-input-sm" placeholder="leave blank for command channel">
+              </div>
+              <label class="ptero-checkbox mt-2">
+                <input type="checkbox" id="chkFarmFdBeforeRoll" checked>
+                <span>run $forcedivorce before starting roll batch</span>
+              </label>
+              <label class="ptero-checkbox">
+                <input type="checkbox" id="chkFarmFdAfterClaim">
+                <span>run $forcedivorce immediately after claiming</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 13. Gamemode 2 ($limroul) & Dailies ($p) -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>gamemode 2 ($limroul) &amp; pokéslot ($p)</h3>
+                <p>pool optimization for gamemode 2 servers and automated pokéslot rolls.</p>
+              </div>
+            </div>
+            <div class="feature-box-controls">
+              <label class="ptero-checkbox">
+                <input type="checkbox" id="chkAutoLimroul">
+                <span>send $limroul 1 1 1 1 on startup (gamemode 2 only)</span>
+              </label>
+              <label class="ptero-checkbox mt-2">
                 <input type="checkbox" id="chkAutoDailies" checked>
-                <span class="slider"></span>
+                <span>automated pokéslot ($p) when ready in $tu</span>
               </label>
+              <label class="ptero-checkbox mt-2">
+                <input type="checkbox" id="chkPauseOnKeyLimit" checked>
+                <span>auto-pause key farming when daily key limit is hit</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 14. Humanization & Sleep / Inactive Hours -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>human sleep schedule &amp; anti-detection</h3>
+                <p>configure quiet hours where the bot pauses active commands and humanization timing windows.</p>
+              </div>
+            </div>
+            <div class="feature-box-controls">
+              <div class="ctrl-group">
+                <label>inactive sleep hours (0-23, comma or range e.g. 2,3,4,5)</label>
+                <input type="text" id="txtInactiveHours" class="ptero-input-sm" placeholder="e.g. 2, 3, 4, 5, 6">
+              </div>
+              <div class="ptero-subgrid-2">
+                <div class="ctrl-group">
+                  <label>humanization window (min)</label>
+                  <input type="number" id="numHumanWindowMins" class="ptero-input-sm" min="5" max="55" value="40">
+                </div>
+                <div class="ctrl-group">
+                  <label>chat quiet wait (sec)</label>
+                  <input type="number" id="numHumanInactivitySecs" class="ptero-input-sm" min="0" max="60" value="5">
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         <div class="card-footer-bar">
-          <button id="btnSaveAutomation" class="btn-ptero-primary">save content</button>
+          <button id="btnSaveAutomation" class="btn-ptero-primary">save automation settings</button>
         </div>
       </div>
     </main>
 
-    <!-- 4. NETWORK / AUTO-DISCOVERY & SERVER ACCESS TAB -->
+    <!-- 5. NETWORK / AUTO-DISCOVERY & SERVER ACCESS TAB -->
     <main id="tab-discovery" class="tab-pane">
       <div class="ptero-card">
         <div class="card-header-bar">
           <div class="header-titles">
-            <h2>server access & multi-guild management</h2>
+            <h2>server access &amp; multi-guild management</h2>
             <p>whitelist allowed servers, configure per-server channels, and assign active targets with absolute control.</p>
           </div>
           <div class="header-actions">
@@ -514,21 +1156,20 @@
           </div>
 
           <div class="card-footer-bar mt-3">
-            <button id="btnSaveServerConfig" class="btn-ptero-primary">save server rules & sync live</button>
+            <button id="btnSaveServerConfig" class="btn-ptero-primary">save server rules &amp; sync live</button>
             <button id="btnCancelServerConfig" class="btn-ptero-subtle">cancel</button>
           </div>
         </div>
       </div>
     </main>
 
-
-    <!-- 5. SETTINGS TAB -->
+    <!-- 6. SETTINGS TAB -->
     <main id="tab-settings" class="tab-pane">
       <div class="ptero-card">
         <div class="card-header-bar">
           <div class="header-titles">
             <h2>general server settings</h2>
-            <p>discord webhooks and expert debugging options.</p>
+            <p>discord webhooks, startup options, and expert debugging controls.</p>
           </div>
         </div>
 
@@ -540,6 +1181,13 @@
 
           <div class="form-field">
             <label class="ptero-checkbox">
+              <input type="checkbox" id="cfgSkipInitialCommands">
+              <span>skip initial startup commands (silent boot until first cycle)</span>
+            </label>
+          </div>
+
+          <div class="form-field">
+            <label class="ptero-checkbox">
               <input type="checkbox" id="cfgDebugMode">
               <span>enable expert debug logging</span>
             </label>
@@ -547,11 +1195,14 @@
         </div>
 
         <div class="card-footer-bar">
-          <button id="btnSaveGeneralSettings" class="btn-ptero-primary">save content</button>
+          <button id="btnSaveGeneralSettings" class="btn-ptero-primary">save settings</button>
         </div>
       </div>
     </main>
   </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="toast-container"></div>
 
   <script src="/static/app.js"></script>
 </body>

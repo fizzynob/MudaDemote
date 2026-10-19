@@ -25,7 +25,7 @@ import re
 from enum import Enum
 from typing import Optional, Callable, Dict, Any, List
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .activity_events import ActivityClassifier
 from .watchdog import ConnectionWatchdog
@@ -195,6 +195,11 @@ class BotInstance:
         with self._state_lock:
             return list(self._restart_required)
 
+    def get_client(self):
+        """Return the active Discord client instance and its event loop."""
+        with self._client_lock:
+            return self._client, self._client_loop
+
     def _set_state(self, new_state: InstanceState, error: Optional[str] = None):
         with self._state_lock:
             old_state = self._state
@@ -218,7 +223,7 @@ class BotInstance:
                 safe_data = _redact_credentials(data, self._known_secrets)
                 event = InstanceEvent(
                     instance_id=self.instance_id,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     event_type=event_type,
                     data=safe_data,
                 )

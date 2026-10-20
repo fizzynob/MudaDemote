@@ -316,6 +316,9 @@ def validate_preset(data, resolved_token=None, require_runtime=True):
         "max_claim_rank", "max_like_rank", "hybrid_panic_instant_claim_min_kakera",
         "hybrid_panic_instant_claim_max_rank", "oh_unknown_explore_clicks", "auto_dk_min_power",
         "auto_give_kakera_threshold", "tower_max_floors", "wishlist_sync_interval_hours",
+        "claim_chat_other_user_window_minutes", "claim_chat_probability", "claim_chat_min_delay",
+        "claim_chat_max_delay", "claim_chat_min_kakera", "roll_speed_jitter_pct",
+        "human_micro_pause_chance", "human_micro_pause_min", "human_micro_pause_max",
     ]
     for key in non_negative:
         if key in data and data[key] is not None:

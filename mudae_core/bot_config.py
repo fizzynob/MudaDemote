@@ -363,7 +363,7 @@ def configure_client(
     client._sphere_board_update_events = {}
     client._kakera_power_reconcile_handle = None
 
-    # Chat reactions for snipes
+    # Chat reactions for claims & snipes + Humanization suite
     client.enable_snipe_chat_reactions = preset_data.get(
         "enable_snipe_chat_reactions", False
     )
@@ -371,12 +371,116 @@ def configure_client(
         "omg",
         "ezz",
     ]
+    client.enable_claim_chat_messages = bool(
+        preset_data.get("enable_claim_chat_messages", False)
+    )
+    client.claim_chat_on_own_rolls = bool(
+        preset_data.get("claim_chat_on_own_rolls", True)
+    )
+    client.claim_chat_on_snipes = bool(
+        preset_data.get("claim_chat_on_snipes", True)
+    )
+    client.claim_chat_only_when_others_active = bool(
+        preset_data.get("claim_chat_only_when_others_active", False)
+    )
+    client.claim_chat_other_user_window_minutes = max(
+        0.0,
+        float(
+            preset_data.get("claim_chat_other_user_window_minutes", 15)
+            if preset_data.get("claim_chat_other_user_window_minutes") is not None
+            else 15
+        ),
+    )
+    raw_claim_msgs = (
+        preset_data.get("claim_chat_messages")
+        if preset_data.get("claim_chat_messages") is not None
+        else preset_data.get("snipe_chat_messages")
+    )
+    client.claim_chat_messages = [
+        str(m).strip()
+        for m in (raw_claim_msgs or ["gg", "nice", "lets gooo", "w", "finally"])
+        if str(m).strip()
+    ]
+    client.claim_chat_probability = max(
+        0,
+        min(
+            100,
+            int(
+                preset_data.get("claim_chat_probability", 100)
+                if preset_data.get("claim_chat_probability") is not None
+                else 100
+            ),
+        ),
+    )
+    client.claim_chat_min_delay = max(
+        0.0,
+        float(
+            preset_data.get("claim_chat_min_delay", 2.0)
+            if preset_data.get("claim_chat_min_delay") is not None
+            else 2.0
+        ),
+    )
+    client.claim_chat_max_delay = max(
+        client.claim_chat_min_delay,
+        float(
+            preset_data.get("claim_chat_max_delay", 5.0)
+            if preset_data.get("claim_chat_max_delay") is not None
+            else 5.0
+        ),
+    )
+    client.claim_chat_min_kakera = max(
+        0, int(preset_data.get("claim_chat_min_kakera", 0) or 0)
+    )
+    client.human_typing_indicator = bool(
+        preset_data.get("human_typing_indicator", False)
+    )
     client.enable_kakera_snipe_chat_reactions = bool(
         preset_data.get("enable_kakera_snipe_chat_reactions", False)
+    )
+    client.kakera_snipe_only_when_others_active = bool(
+        preset_data.get("kakera_snipe_only_when_others_active", False)
     )
     client.kakera_snipe_chat_messages = preset_data.get(
         "kakera_snipe_chat_messages"
     ) or ["nice", "free kakera"]
+    client.roll_speed_jitter_pct = max(
+        0, min(100, int(preset_data.get("roll_speed_jitter_pct", 0) or 0))
+    )
+    client.human_micro_pause_enabled = bool(
+        preset_data.get("human_micro_pause_enabled", False)
+    )
+    client.human_micro_pause_chance = max(
+        0,
+        min(
+            100,
+            int(
+                preset_data.get("human_micro_pause_chance", 8)
+                if preset_data.get("human_micro_pause_chance") is not None
+                else 8
+            ),
+        ),
+    )
+    client.human_micro_pause_min = max(
+        0.1,
+        float(
+            preset_data.get("human_micro_pause_min", 1.2)
+            if preset_data.get("human_micro_pause_min") is not None
+            else 1.2
+        ),
+    )
+    client.human_micro_pause_max = max(
+        client.human_micro_pause_min,
+        float(
+            preset_data.get("human_micro_pause_max", 3.0)
+            if preset_data.get("human_micro_pause_max") is not None
+            else 3.0
+        ),
+    )
+    client.auto_birthday_candles = bool(
+        preset_data.get("auto_birthday_candles", True)
+    )
+    client._last_other_human_message_utc = {}
+    client._last_other_human_author = {}
 
     # Kakera farm / forcedivorce settings
     configured_farm_characters = list(preset_data.get("farm_characters") or [])
@@ -701,7 +805,14 @@ LIVE_CONFIG_ATTRIBUTES = frozenset({
     "oh_use_individually", "oh_priority_order", "oh_unknown_explore_clicks",
     "oc_reward_priority_order", "oc_collect_after_red",
     "enable_snipe_chat_reactions", "snipe_chat_messages",
-    "enable_kakera_snipe_chat_reactions", "kakera_snipe_chat_messages",
+    "enable_claim_chat_messages", "claim_chat_on_own_rolls", "claim_chat_on_snipes",
+    "claim_chat_only_when_others_active", "claim_chat_other_user_window_minutes",
+    "claim_chat_messages", "claim_chat_probability", "claim_chat_min_delay",
+    "claim_chat_max_delay", "claim_chat_min_kakera", "human_typing_indicator",
+    "enable_kakera_snipe_chat_reactions", "kakera_snipe_only_when_others_active",
+    "kakera_snipe_chat_messages", "roll_speed_jitter_pct",
+    "human_micro_pause_enabled", "human_micro_pause_chance",
+    "human_micro_pause_min", "human_micro_pause_max", "auto_birthday_candles",
     "farm_characters", "farm_character", "farm_character_enabled",
     "farm_forcedivorce_after_claim", "farm_forcedivorce_before_roll",
     "farm_forcedivorce_after_other_claim", "op_perk_5_only",

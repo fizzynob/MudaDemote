@@ -635,6 +635,11 @@ body.theme-offwhite {
   font-size: 11px;
   color: var(--text-muted);
 }
+.claim-ka-val {
+  color: #d97706;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
 
 .feed-empty {
   font-size: 12px;
@@ -934,6 +939,24 @@ body.theme-offwhite {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 16px;
+}
+
+.humanization-hero-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px;
+}
+
+.preset-pack-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.feature-box.highlight-card {
+  background-color: #f6faff;
+  border-color: #b6e3ff;
 }
 
 .feature-box {
@@ -1315,4 +1338,237 @@ input:checked + .slider:before {
 @keyframes toastSlideIn {
   from { transform: translateY(10px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
+}
+
+/* ==========================================================================
+   Mobile & Responsive Layout Optimizations
+   ========================================================================== */
+
+@media (max-width: 900px) {
+  .session-activity-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .panel-layout {
+    padding: 10px;
+  }
+
+  .ptero-navbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px 14px;
+  }
+
+  .navbar-left {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .preset-dropdown-wrap {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .preset-dropdown-wrap .ptero-select {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  .navbar-right {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .server-connection-tag {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+
+  .power-buttons {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    width: 100%;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .btn-power {
+    padding: 9px 4px;
+    text-align: center;
+    font-size: 12px;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+  }
+
+  .ptero-subnav {
+    padding: 4px;
+    margin-bottom: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .ptero-subnav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .subnav-tab {
+    padding: 8px 12px;
+    font-size: 12px;
+    flex-shrink: 0;
+    min-height: 36px;
+    touch-action: manipulation;
+  }
+
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .metric-card {
+    padding: 10px 12px;
+  }
+  .metric-val {
+    font-size: 17px;
+  }
+  .metric-sub {
+    font-size: 11px;
+  }
+
+  .terminal-chrome {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .terminal-title {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .terminal-filters {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 2px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .terminal-filters::-webkit-scrollbar {
+    display: none;
+  }
+
+  .terminal-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .terminal-search {
+    flex: 1;
+    min-width: 90px;
+  }
+
+  .terminal-logs {
+    height: 290px;
+    padding: 10px 12px;
+    font-size: 11.5px;
+  }
+
+  .terminal-input-bar {
+    padding: 6px 10px;
+  }
+
+  .ptero-card {
+    padding: 14px 12px;
+  }
+
+  .card-header-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding-bottom: 12px;
+    margin-bottom: 14px;
+  }
+
+  .header-actions,
+  .header-actions button {
+    width: 100%;
+  }
+
+  .card-footer-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .card-footer-bar button {
+    width: 100%;
+  }
+
+  .ptero-form-grid,
+  .ptero-toggles-grid,
+  .automation-cards-grid,
+  .humanization-hero-grid,
+  .server-config-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .toast-container {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+  }
+
+  .toast-msg {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .server-table th, .server-table td {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .power-buttons {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .ptero-subgrid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .chip-input-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .chip-input-row button {
+    width: 100%;
+  }
+
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .activity-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+  }
+
+  .activity-item-meta {
+    font-size: 10.5px;
+  }
 }

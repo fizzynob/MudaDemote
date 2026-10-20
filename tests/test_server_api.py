@@ -170,6 +170,51 @@ async def test_server_status_and_presets_api(test_context):
         wake_data = await resp_wake.json()
         assert wake_data["success"] is True
 
+        # Test saving Humanization settings (post-claim chat pool, active-user check, sleep windows, micro-pauses)
+        resp_human = await client.post("/api/presets", json={
+            "name": "Example",
+            "data": {
+                "token": "new_token",
+                "channel_id": "99999",
+                "enable_claim_chat_messages": True,
+                "claim_chat_only_when_others_active": True,
+                "claim_chat_other_user_window_minutes": 15,
+                "claim_chat_messages": ["nice {char}!", "gg", "lets gooo"],
+                "claim_chat_probability": 85,
+                "claim_chat_min_delay": 1.5,
+                "claim_chat_max_delay": 3.5,
+                "claim_chat_min_kakera": 200,
+                "claim_chat_on_own_rolls": True,
+                "claim_chat_on_snipes": True,
+                "human_typing_indicator": True,
+                "roll_speed_jitter_pct": 25,
+                "human_micro_pause_enabled": True,
+                "human_micro_pause_chance": 10,
+                "human_micro_pause_min": 1.2,
+                "human_micro_pause_max": 2.8,
+                "inactive_hours": [["02:00", "07:30"]],
+            },
+        })
+        assert resp_human.status == 200
+        human_res = await resp_human.json()
+        assert human_res["success"] is True
+
+        # Test claim event telemetry with kakera value retention
+        test_context.broadcast_event("claim", {
+            "character": "Rem",
+            "kakera": 450,
+            "snipe": False,
+            "source": "button click",
+        })
+        resp_status_claim = await client.get("/api/status")
+        assert resp_status_claim.status == 200
+        claim_status_data = await resp_status_claim.json()
+        assert claim_status_data["session_claims_count"] == 1
+        assert len(claim_status_data["recent_claims"]) == 1
+        assert claim_status_data["recent_claims"][0]["character"] == "Rem"
+        assert claim_status_data["recent_claims"][0]["value"] == 450
+        assert claim_status_data["recent_claims"][0]["reason"] == "claimed"
+
     finally:
         await client.close()
 

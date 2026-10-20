@@ -6173,7 +6173,19 @@ def run_bot(preset_name, preset_data, log_function=print_log):
                         logical_roll_cycle_id,
                     )
 
-                roll_delay = (max(2.0, client.roll_speed) if effective_slash_rolls() else client.roll_speed) + random.uniform(0.05, 0.25)
+                base_roll_speed = max(2.0, client.roll_speed) if effective_slash_rolls() else client.roll_speed
+                jitter_pct = getattr(client, "roll_speed_jitter_pct", 0) or 0
+                if jitter_pct > 0:
+                    factor = max(0.2, 1.0 + random.uniform(-jitter_pct / 100.0, jitter_pct / 100.0))
+                    roll_delay = (base_roll_speed * factor) + random.uniform(0.05, 0.25)
+                else:
+                    roll_delay = base_roll_speed + random.uniform(0.05, 0.25)
+                if getattr(client, "human_micro_pause_enabled", False):
+                    mp_chance = getattr(client, "human_micro_pause_chance", 8) or 0
+                    if mp_chance > 0 and random.randint(1, 100) <= mp_chance:
+                        mp_min = max(0.1, float(getattr(client, "human_micro_pause_min", 1.2) or 1.2))
+                        mp_max = max(mp_min, float(getattr(client, "human_micro_pause_max", 3.0) or 3.0))
+                        roll_delay += random.uniform(mp_min, mp_max)
                 if not await active_delay(roll_delay):
                     mark_status_dirty(client, {"rolls"}, reason="roll-delay-interrupted")
                     break
@@ -6530,6 +6542,18 @@ def run_bot(preset_name, preset_data, log_function=print_log):
         BotLogger.log(f"{lbl}: SUCCESS! We got {char_name}. ({verification_source})", preset_name, "CLAIM")
 
         now = datetime.datetime.now(timezone.utc)
+        if not hasattr(client, "recent_claims"):
+            client.recent_claims = []
+        client.recent_claims.insert(0, {
+            "timestamp": now.isoformat(),
+            "character": char_name,
+            "value": character_kakera or 0,
+            "kakera": character_kakera or 0,
+            "reason": "sniped" if is_snipe_action else "claimed",
+            "source": verification_source,
+        })
+        if len(client.recent_claims) > 30:
+            client.recent_claims.pop()
         if consumes_claim:
             adaptive_slash_ledger.record(
                 getattr(channel, "id", None), char_name, pending.get("message_id")
@@ -6644,12 +6668,117 @@ def run_bot(preset_name, preset_data, log_function=print_log):
                     "after $rt (solo/key mode)",
                 )
 
-        if is_snipe_action and client.enable_snipe_chat_reactions and client.snipe_chat_messages:
+        await maybe_send_post_claim_chat_message(
+            channel,
+            char_name=char_name,
+            character_series=character_series,
+            character_kakera=character_kakera,
+            is_snipe_action=is_snipe_action,
+            is_protected_wish=bool(pending.get("protect_from_auto_divorce")),
+        )
+
+    async def has_other_human_messaged_recently(channel):
+        """Return True if a user other than our account and Mudae sent a message recently."""
+        ch_id = getattr(channel, "id", None)
+        own_id = getattr(getattr(client, "user", None), "id", None)
+        window_mins = float(getattr(client, "claim_chat_other_user_window_minutes", 15) or 0)
+        now_utc = datetime.datetime.now(timezone.utc)
+        tracked_map = getattr(client, "_last_other_human_message_utc", None)
+        if isinstance(tracked_map, dict) and ch_id in tracked_map:
+            last_ts = tracked_map[ch_id]
+            if window_mins <= 0 or (now_utc - last_ts).total_seconds() <= window_mins * 60.0:
+                return True
+        if hasattr(channel, "history"):
             try:
-                if await active_delay(random.uniform(2.0, 5.0)):
-                    await guarded_send(channel, random.choice(client.snipe_chat_messages))
-            except Exception as e:
-                BotLogger.log(f"Snipe chat reaction failed: {e}", preset_name, "ERROR")
+                async for m in channel.history(limit=15):
+                    author = getattr(m, "author", None)
+                    author_id = getattr(author, "id", None)
+                    if author_id is None or author_id == TARGET_BOT_ID or (own_id is not None and author_id == own_id):
+                        continue
+                    if getattr(author, "bot", False):
+                        continue
+                    created_at = getattr(m, "created_at", None)
+                    if created_at is not None and window_mins > 0:
+                        if created_at.tzinfo is None:
+                            created_at = created_at.replace(tzinfo=timezone.utc)
+                        if (now_utc - created_at).total_seconds() > window_mins * 60.0:
+                            continue
+                    if isinstance(tracked_map, dict) and ch_id is not None:
+                        tracked_map[ch_id] = created_at or now_utc
+                    return True
+            except Exception:
+                pass
+        return False
+
+    async def maybe_send_post_claim_chat_message(
+        channel,
+        *,
+        char_name,
+        character_series,
+        character_kakera,
+        is_snipe_action,
+        is_protected_wish=False,
+    ):
+        claim_chat_enabled = bool(getattr(client, "enable_claim_chat_messages", False))
+        legacy_snipe_chat = bool(
+            is_snipe_action
+            and getattr(client, "enable_snipe_chat_reactions", False)
+            and getattr(client, "snipe_chat_messages", None)
+        )
+        if not claim_chat_enabled and not legacy_snipe_chat:
+            return
+
+        if claim_chat_enabled:
+            if is_snipe_action and not getattr(client, "claim_chat_on_snipes", True) and not legacy_snipe_chat:
+                return
+            if not is_snipe_action and not getattr(client, "claim_chat_on_own_rolls", True):
+                return
+            min_kv = int(getattr(client, "claim_chat_min_kakera", 0) or 0)
+            if min_kv > 0 and not is_protected_wish and (character_kakera or 0) < min_kv:
+                return
+            prob = int(getattr(client, "claim_chat_probability", 100) if getattr(client, "claim_chat_probability", None) is not None else 100)
+            if prob <= 0 or (prob < 100 and random.randint(1, 100) > prob):
+                return
+
+        if getattr(client, "claim_chat_only_when_others_active", False):
+            others_active = await has_other_human_messaged_recently(channel)
+            if not others_active:
+                BotLogger.log(
+                    "Post-claim chat skipped: no other user has sent a message recently in this channel.",
+                    preset_name,
+                    "INFO",
+                )
+                return
+
+        pool = (
+            getattr(client, "claim_chat_messages", None)
+            if claim_chat_enabled and getattr(client, "claim_chat_messages", None)
+            else getattr(client, "snipe_chat_messages", None)
+        )
+        if not pool:
+            return
+
+        min_d = float(getattr(client, "claim_chat_min_delay", 2.0) if getattr(client, "claim_chat_min_delay", None) is not None else 2.0)
+        max_d = max(min_d, float(getattr(client, "claim_chat_max_delay", 5.0) if getattr(client, "claim_chat_max_delay", None) is not None else 5.0))
+        try:
+            if not await active_delay(random.uniform(min_d, max_d)):
+                return
+            chosen = str(random.choice(pool))
+            chosen = (
+                chosen.replace("{char}", str(char_name or ""))
+                .replace("{series}", str(character_series or ""))
+                .replace("{kakera}", str(character_kakera or 0))
+            )
+            if getattr(client, "human_typing_indicator", False) and hasattr(channel, "typing"):
+                try:
+                    async with channel.typing():
+                        if not await active_delay(random.uniform(0.7, 1.6)):
+                            return
+                except Exception:
+                    pass
+            await guarded_send(channel, chosen)
+        except Exception as e:
+            BotLogger.log(f"Snipe chat reaction failed: {e}", preset_name, "ERROR")
 
     def retry_pending_claim_from_cached_state(pending, pending_channel):
         """Retry one unconfirmed click without spending time on a redundant $tu."""
@@ -7659,7 +7788,17 @@ def run_bot(preset_name, preset_data, log_function=print_log):
                     and client.kakera_snipe_chat_messages
                 ):
                     try:
-                        if await active_delay(random.uniform(2.0, 5.0)):
+                        can_send_ks_chat = True
+                        if getattr(client, "kakera_snipe_only_when_others_active", False):
+                            can_send_ks_chat = await has_other_human_messaged_recently(channel)
+                        if can_send_ks_chat and await active_delay(random.uniform(2.0, 5.0)):
+                            if getattr(client, "human_typing_indicator", False) and hasattr(channel, "typing"):
+                                try:
+                                    async with channel.typing():
+                                        if not await active_delay(random.uniform(0.7, 1.5)):
+                                            return clicked
+                                except Exception:
+                                    pass
                             await guarded_send(
                                 channel,
                                 random.choice(client.kakera_snipe_chat_messages),
@@ -8071,6 +8210,21 @@ def run_bot(preset_name, preset_data, log_function=print_log):
                 client.tower_automation.on_tower_message(message.content or "")
             if getattr(client, "wishlist_sync", None):
                 client.wishlist_sync.on_wishlist_response(message.content or "", getattr(message, "embeds", None))
+        else:
+            own_uid = getattr(getattr(client, "user", None), "id", None)
+            if (
+                own_uid is not None
+                and message.author.id != own_uid
+                and not getattr(message.author, "bot", False)
+            ):
+                tracked_map = getattr(client, "_last_other_human_message_utc", None)
+                if isinstance(tracked_map, dict):
+                    tracked_map[message.channel.id] = datetime.datetime.now(timezone.utc)
+                author_map = getattr(client, "_last_other_human_author", None)
+                if isinstance(author_map, dict):
+                    author_map[message.channel.id] = getattr(
+                        message.author, "display_name", getattr(message.author, "name", "user")
+                    )
         is_roll = (message.channel.id == client.target_channel_id)
         is_snipe = (client.snipe_mode and message.channel.id in client.snipe_channels)
         is_kakera_snipe_channel = (
@@ -8167,7 +8321,7 @@ def run_bot(preset_name, preset_data, log_function=print_log):
                 BotLogger.log(f"Post-maintenance: Channel inactive for {gap:.0f}s. Resuming.", preset_name, "INFO")
             client._post_maintenance_inactivity_needed = False
 
-        if message.components:
+        if message.components and getattr(client, "auto_birthday_candles", True):
             for comp in message.components:
                 for btn in comp.children:
                     if hasattr(btn.emoji, 'name') and btn.emoji.name == '🕯️':

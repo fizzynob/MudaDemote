@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 Event = Tuple[str, Dict[str, Any]]
 
 _NUMBER = r"[\d.,]+"
-_CLAIM_OK = re.compile(r"^(?P<kind>Claim|Snipe) Verification: SUCCESS! We got (?P<name>.+?)\. \((?P<source>[^()]*)\)\s*$")
+_CLAIM_OK = re.compile(r"^(?P<kind>Claim|Snipe) Verification: SUCCESS! We got (?P<name>.+?)(?: \((?P<ka>" + _NUMBER + r") ka\))?\. \((?P<source>[^()]*)\)\s*$")
 _CLAIM_MISS = re.compile(r"^Claim Verification: FAILED\. (?P<name>.+?) was not claimed")
 _ATTEMPT = re.compile(r"^Claim attempt: (?P<name>.+?)(?: \((?P<ka>" + _NUMBER + r") ka\))?$")
 _ATTEMPT_REACTION = re.compile(r"^Claiming (?P<name>.+?)(?: \((?P<ka>" + _NUMBER + r") ka\))? \(Reaction: .*\)$")
@@ -55,9 +55,10 @@ class ActivityClassifier:
         found = _CLAIM_OK.match(text)
         if found:
             name = found.group("name")
-            kakera = self._take(name)
+            ka_group = found.groupdict().get("ka")
+            kakera = _number(ka_group) if ka_group else self._take(name)
             snipe = found.group("kind") == "Snipe"
-            return [("claim", {"character": name, "kakera": kakera, "snipe": snipe, "source": found.group("source")[:60],
+            return [("claim", {"character": name, "kakera": kakera, "value": kakera, "snipe": snipe, "source": found.group("source")[:60],
                                "message": _with_kakera("{} {}".format("Sniped" if snipe else "Claimed", name), kakera)})]
         found = _CLAIM_MISS.match(text)
         if found:

@@ -19,6 +19,13 @@ let wishlistCharacters = [];
 let seriesWishlist = [];
 let avoidCharacters = [];
 
+// Humanization Pool Arrays for active preset
+const DEFAULT_CLAIM_EMOJIS = ["💖", "💗", "💘", "❤️", "💓", "💕", "♥️"];
+let claimChatMessages = [];
+let kakeraSnipeChatMessages = [];
+let claimEmojis = [...DEFAULT_CLAIM_EMOJIS];
+let sleepWindows = []; // stored as ["HH:MM", "HH:MM"] pairs
+
 // Header & Navigation Elements
 const elServerBreadcrumb = document.getElementById("txtActivePreset");
 const elPresetSelect = document.getElementById("presetSelect");
@@ -205,6 +212,64 @@ const elNumHumanInactivitySecs = document.getElementById("numHumanInactivitySecs
 
 const elBtnSaveAutomation = document.getElementById("btnSaveAutomation");
 const elBtnSaveAutomationTop = document.getElementById("btnSaveAutomationTop");
+
+// Humanization Tab Elements
+const elBtnSaveHumanization = document.getElementById("btnSaveHumanization");
+const elBtnSaveHumanizationTop = document.getElementById("btnSaveHumanizationTop");
+const elChkEnableClaimChat = document.getElementById("chkEnableClaimChat");
+const elChkClaimChatOnlyWhenOthersActive = document.getElementById("chkClaimChatOnlyWhenOthersActive");
+const elNumClaimChatOtherUserWindowMins = document.getElementById("numClaimChatOtherUserWindowMins");
+const elNumClaimChatProbability = document.getElementById("numClaimChatProbability");
+const elNumClaimChatMinDelay = document.getElementById("numClaimChatMinDelay");
+const elNumClaimChatMaxDelay = document.getElementById("numClaimChatMaxDelay");
+const elNumClaimChatMinKakera = document.getElementById("numClaimChatMinKakera");
+const elChkClaimChatOwnRolls = document.getElementById("chkClaimChatOwnRolls");
+const elChkClaimChatSnipes = document.getElementById("chkClaimChatSnipes");
+const elChkHumanTypingIndicator = document.getElementById("chkHumanTypingIndicator");
+
+const elCountClaimChatMsgs = document.getElementById("countClaimChatMsgs");
+const elInputAddClaimChatMsg = document.getElementById("inputAddClaimChatMsg");
+const elBtnAddClaimChatMsg = document.getElementById("btnAddClaimChatMsg");
+const elBtnClearClaimChatMsgs = document.getElementById("btnClearClaimChatMsgs");
+const elChipsClaimChatMessages = document.getElementById("chipsClaimChatMessages");
+const elBtnPackCasual = document.getElementById("btnPackCasual");
+const elBtnPackHype = document.getElementById("btnPackHype");
+const elBtnPackMinimal = document.getElementById("btnPackMinimal");
+const elBtnPackDynamic = document.getElementById("btnPackDynamic");
+
+const elChkEnableKakeraSnipeChat = document.getElementById("chkEnableKakeraSnipeChat");
+const elChkKakeraSnipeOnlyWhenOthersActive = document.getElementById("chkKakeraSnipeOnlyWhenOthersActive");
+const elCountKakeraSnipeMsgs = document.getElementById("countKakeraSnipeMsgs");
+const elInputAddKakeraSnipeMsg = document.getElementById("inputAddKakeraSnipeMsg");
+const elBtnAddKakeraSnipeMsg = document.getElementById("btnAddKakeraSnipeMsg");
+const elBtnClearKakeraSnipeMsgs = document.getElementById("btnClearKakeraSnipeMsgs");
+const elChipsKakeraSnipeChatMessages = document.getElementById("chipsKakeraSnipeChatMessages");
+
+const elCountClaimEmojis = document.getElementById("countClaimEmojis");
+const elInputAddClaimEmoji = document.getElementById("inputAddClaimEmoji");
+const elBtnAddClaimEmoji = document.getElementById("btnAddClaimEmoji");
+const elBtnResetClaimEmojis = document.getElementById("btnResetClaimEmojis");
+const elChipsClaimEmojis = document.getElementById("chipsClaimEmojis");
+const elChkAutoBirthdayCandles = document.getElementById("chkAutoBirthdayCandles");
+
+const elChkHumanMicroPause = document.getElementById("chkHumanMicroPause");
+const elNumRollSpeedJitterPct = document.getElementById("numRollSpeedJitterPct");
+const elNumHumanMicroPauseChance = document.getElementById("numHumanMicroPauseChance");
+const elNumHumanMicroPauseMin = document.getElementById("numHumanMicroPauseMin");
+const elNumHumanMicroPauseMax = document.getElementById("numHumanMicroPauseMax");
+
+const elNumReactiveSnipeDelay = document.getElementById("numReactiveSnipeDelay");
+const elNumHumanSnipeDelay = document.getElementById("numHumanSnipeDelay");
+const elNumReactiveKakeraMinDelay = document.getElementById("numReactiveKakeraMinDelay");
+const elNumReactiveKakeraMaxDelay = document.getElementById("numReactiveKakeraMaxDelay");
+
+const elChkHumanizationMaster = document.getElementById("chkHumanizationMaster");
+const elTxtScheduledRollTimes = document.getElementById("txtScheduledRollTimes");
+const elCountSleepWindows = document.getElementById("countSleepWindows");
+const elInputAddSleepWindow = document.getElementById("inputAddSleepWindow");
+const elBtnAddSleepWindow = document.getElementById("btnAddSleepWindow");
+const elBtnClearSleepWindows = document.getElementById("btnClearSleepWindows");
+const elChipsSleepWindows = document.getElementById("chipsSleepWindows");
 
 // Server Access & Discovery Elements
 const elBtnDiscoverServers = document.getElementById("btnDiscoverServers");
@@ -399,10 +464,16 @@ function renderActivityFeeds(status) {
     } else {
       elRecentClaimsList.innerHTML = status.recent_claims.slice(0, 8).map(c => {
         const ts = c.timestamp ? new Date(c.timestamp).toLocaleTimeString().toLowerCase() : "";
-        const val = c.value ? ` • ${c.value} ka` : "";
+        let ka = c.value != null && c.value > 0 ? c.value : (c.kakera != null && c.kakera > 0 ? c.kakera : null);
+        if (ka == null && c.raw) {
+          const match = String(c.raw).match(/\((\d+)\s*ka\)/i);
+          if (match) ka = parseInt(match[1], 10);
+        }
+        const val = ka ? ` • <span class="claim-ka-val">+${ka} ka</span>` : "";
+        const reason = (c.reason || "claimed").toLowerCase();
         return `<div class="activity-item">
           <span class="activity-item-main">${(c.character || "character").toLowerCase()}</span>
-          <span class="activity-item-meta">${(c.reason || "claimed").toLowerCase()}${val} • ${ts}</span>
+          <span class="activity-item-meta">${reason}${val} • ${ts}</span>
         </div>`;
       }).join("");
     }
@@ -804,6 +875,187 @@ if (elBtnClearAvoidChars) {
   });
 }
 
+// ============================================================================
+// Humanization Pool Managers (Post-Claim Chat, Kakera Chat, Emojis, Sleep)
+// ============================================================================
+
+function normalizeClockValue(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+  if (/^\d{1,2}:\d{2}$/.test(s)) {
+    const [hh, mm] = s.split(":").map(x => parseInt(x, 10));
+    if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
+      return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+    }
+    return null;
+  }
+  const h = parseInt(s, 10);
+  if (!isNaN(h) && h >= 0 && h <= 23) {
+    return `${String(h).padStart(2, "0")}:00`;
+  }
+  return null;
+}
+
+function parseSleepWindowEntry(rawText) {
+  const results = [];
+  if (!rawText) return results;
+  rawText.split(",").forEach(part => {
+    const p = part.trim();
+    if (!p || !p.includes("-")) return;
+    const [rawStart, rawEnd] = p.split("-");
+    const startClock = normalizeClockValue(rawStart);
+    const endClock = normalizeClockValue(rawEnd);
+    if (startClock && endClock && startClock !== endClock) {
+      results.push([startClock, endClock]);
+    }
+  });
+  return results;
+}
+
+function renderAllHumanizationChips() {
+  renderChipList(elChipsClaimChatMessages, elCountClaimChatMsgs, claimChatMessages, false, (idx) => {
+    claimChatMessages.splice(idx, 1);
+    renderAllHumanizationChips();
+  });
+  renderChipList(elChipsKakeraSnipeChatMessages, elCountKakeraSnipeMsgs, kakeraSnipeChatMessages, false, (idx) => {
+    kakeraSnipeChatMessages.splice(idx, 1);
+    renderAllHumanizationChips();
+  });
+  renderChipList(elChipsClaimEmojis, elCountClaimEmojis, claimEmojis, false, (idx) => {
+    claimEmojis.splice(idx, 1);
+    renderAllHumanizationChips();
+  });
+  const sleepLabels = sleepWindows.map(pair => Array.isArray(pair) ? `${pair[0]} – ${pair[1]}` : String(pair));
+  renderChipList(elChipsSleepWindows, elCountSleepWindows, sleepLabels, false, (idx) => {
+    sleepWindows.splice(idx, 1);
+    renderAllHumanizationChips();
+  });
+}
+
+function addMessagesToPool(targetArr, rawInput) {
+  if (!rawInput) return;
+  const parts = rawInput.split(/[\r\n,]+/).map(s => s.trim()).filter(Boolean);
+  const existingLower = new Set(targetArr.map(x => x.toLowerCase()));
+  parts.forEach(msg => {
+    if (!existingLower.has(msg.toLowerCase())) {
+      targetArr.push(msg);
+      existingLower.add(msg.toLowerCase());
+    }
+  });
+  renderAllHumanizationChips();
+}
+
+if (elBtnAddClaimChatMsg) {
+  elBtnAddClaimChatMsg.addEventListener("click", () => {
+    addMessagesToPool(claimChatMessages, elInputAddClaimChatMsg.value);
+    elInputAddClaimChatMsg.value = "";
+  });
+  elInputAddClaimChatMsg.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addMessagesToPool(claimChatMessages, elInputAddClaimChatMsg.value);
+      elInputAddClaimChatMsg.value = "";
+    }
+  });
+}
+if (elBtnClearClaimChatMsgs) {
+  elBtnClearClaimChatMsgs.addEventListener("click", () => {
+    claimChatMessages = [];
+    renderAllHumanizationChips();
+  });
+}
+
+// Preset Quick Packs for Post-Claim Messages
+if (elBtnPackCasual) {
+  elBtnPackCasual.addEventListener("click", () => {
+    addMessagesToPool(claimChatMessages, "nice, gg, sweet, ooh nice, finally, w, ill take that, neat");
+  });
+}
+if (elBtnPackHype) {
+  elBtnPackHype.addEventListener("click", () => {
+    addMessagesToPool(claimChatMessages, "lets gooo, huge, yoink, mine!, no way, W pull, clutched it");
+  });
+}
+if (elBtnPackMinimal) {
+  elBtnPackMinimal.addEventListener("click", () => {
+    addMessagesToPool(claimChatMessages, "w, gg, nice, ty, ooh, :o");
+  });
+}
+if (elBtnPackDynamic) {
+  elBtnPackDynamic.addEventListener("click", () => {
+    addMessagesToPool(claimChatMessages, "nice {char}!, finally got {char}, {char} lets go, ooh {series} pull, {kakera} ka nice");
+  });
+}
+
+if (elBtnAddKakeraSnipeMsg) {
+  elBtnAddKakeraSnipeMsg.addEventListener("click", () => {
+    addMessagesToPool(kakeraSnipeChatMessages, elInputAddKakeraSnipeMsg.value);
+    elInputAddKakeraSnipeMsg.value = "";
+  });
+  elInputAddKakeraSnipeMsg.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addMessagesToPool(kakeraSnipeChatMessages, elInputAddKakeraSnipeMsg.value);
+      elInputAddKakeraSnipeMsg.value = "";
+    }
+  });
+}
+if (elBtnClearKakeraSnipeMsgs) {
+  elBtnClearKakeraSnipeMsgs.addEventListener("click", () => {
+    kakeraSnipeChatMessages = [];
+    renderAllHumanizationChips();
+  });
+}
+
+if (elBtnAddClaimEmoji) {
+  elBtnAddClaimEmoji.addEventListener("click", () => {
+    addMessagesToPool(claimEmojis, elInputAddClaimEmoji.value);
+    elInputAddClaimEmoji.value = "";
+  });
+  elInputAddClaimEmoji.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addMessagesToPool(claimEmojis, elInputAddClaimEmoji.value);
+      elInputAddClaimEmoji.value = "";
+    }
+  });
+}
+if (elBtnResetClaimEmojis) {
+  elBtnResetClaimEmojis.addEventListener("click", () => {
+    claimEmojis = [...DEFAULT_CLAIM_EMOJIS];
+    renderAllHumanizationChips();
+  });
+}
+
+if (elBtnAddSleepWindow) {
+  const handleAddSleep = () => {
+    const parsed = parseSleepWindowEntry(elInputAddSleepWindow.value);
+    if (!parsed.length) {
+      showToast("use format hh:mm-hh:mm or h-h (e.g. 02:00-07:30)", "error");
+      return;
+    }
+    parsed.forEach(pair => {
+      const exists = sleepWindows.some(w => Array.isArray(w) && w[0] === pair[0] && w[1] === pair[1]);
+      if (!exists) sleepWindows.push(pair);
+    });
+    elInputAddSleepWindow.value = "";
+    renderAllHumanizationChips();
+  };
+  elBtnAddSleepWindow.addEventListener("click", handleAddSleep);
+  elInputAddSleepWindow.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleAddSleep();
+    }
+  });
+}
+if (elBtnClearSleepWindows) {
+  elBtnClearSleepWindows.addEventListener("click", () => {
+    sleepWindows = [];
+    renderAllHumanizationChips();
+  });
+}
+
 // Populate Preset Forms
 function populatePresetData(data) {
   if (!data) return;
@@ -927,11 +1179,107 @@ function populatePresetData(data) {
   elChkAutoDailies.checked = data.auto_p_enabled !== false;
   if (elChkPauseOnKeyLimit) elChkPauseOnKeyLimit.checked = data.pause_on_key_limit !== false;
 
-  if (elTxtInactiveHours) {
-    elTxtInactiveHours.value = Array.isArray(data.inactive_hours) ? data.inactive_hours.join(", ") : "";
+  // Humanization & Anti-Detection Suite
+  if (elChkEnableClaimChat) {
+    elChkEnableClaimChat.checked = !!(data.enable_claim_chat_messages || data.enable_snipe_chat_reactions);
+  }
+  if (elChkClaimChatOnlyWhenOthersActive) {
+    elChkClaimChatOnlyWhenOthersActive.checked = data.claim_chat_only_when_others_active !== false;
+  }
+  if (elNumClaimChatOtherUserWindowMins) {
+    elNumClaimChatOtherUserWindowMins.value = data.claim_chat_other_user_window_minutes != null ? data.claim_chat_other_user_window_minutes : 15;
+  }
+  if (elNumClaimChatProbability) {
+    elNumClaimChatProbability.value = data.claim_chat_probability != null ? data.claim_chat_probability : 100;
+  }
+  if (elNumClaimChatMinDelay) {
+    elNumClaimChatMinDelay.value = data.claim_chat_min_delay != null ? data.claim_chat_min_delay : 1.8;
+  }
+  if (elNumClaimChatMaxDelay) {
+    elNumClaimChatMaxDelay.value = data.claim_chat_max_delay != null ? data.claim_chat_max_delay : 4.2;
+  }
+  if (elNumClaimChatMinKakera) {
+    elNumClaimChatMinKakera.value = data.claim_chat_min_kakera != null ? data.claim_chat_min_kakera : 0;
+  }
+  if (elChkClaimChatOwnRolls) {
+    elChkClaimChatOwnRolls.checked = data.claim_chat_on_own_rolls !== false;
+  }
+  if (elChkClaimChatSnipes) {
+    elChkClaimChatSnipes.checked = data.claim_chat_on_snipes !== false;
+  }
+  if (elChkHumanTypingIndicator) {
+    elChkHumanTypingIndicator.checked = data.human_typing_indicator !== false;
+  }
+
+  const rawClaimMsgs = Array.isArray(data.claim_chat_messages) && data.claim_chat_messages.length
+    ? data.claim_chat_messages
+    : (Array.isArray(data.snipe_chat_messages) ? data.snipe_chat_messages : []);
+  claimChatMessages = [...rawClaimMsgs];
+
+  if (elChkEnableKakeraSnipeChat) {
+    elChkEnableKakeraSnipeChat.checked = !!data.enable_kakera_snipe_chat_reactions;
+  }
+  if (elChkKakeraSnipeOnlyWhenOthersActive) {
+    elChkKakeraSnipeOnlyWhenOthersActive.checked = data.kakera_snipe_only_when_others_active !== false;
+  }
+  kakeraSnipeChatMessages = Array.isArray(data.kakera_snipe_chat_messages) ? [...data.kakera_snipe_chat_messages] : [];
+
+  claimEmojis = Array.isArray(data.claim_emojis) && data.claim_emojis.length
+    ? [...data.claim_emojis]
+    : [...DEFAULT_CLAIM_EMOJIS];
+  if (elChkAutoBirthdayCandles) {
+    elChkAutoBirthdayCandles.checked = data.auto_birthday_candles !== false;
+  }
+
+  if (elChkHumanMicroPause) {
+    elChkHumanMicroPause.checked = !!data.human_micro_pause_enabled;
+  }
+  if (elNumRollSpeedJitterPct) {
+    elNumRollSpeedJitterPct.value = data.roll_speed_jitter_pct != null ? data.roll_speed_jitter_pct : 20;
+  }
+  if (elNumHumanMicroPauseChance) {
+    elNumHumanMicroPauseChance.value = data.human_micro_pause_chance != null ? data.human_micro_pause_chance : 8;
+  }
+  if (elNumHumanMicroPauseMin) {
+    elNumHumanMicroPauseMin.value = data.human_micro_pause_min != null ? data.human_micro_pause_min : 1.2;
+  }
+  if (elNumHumanMicroPauseMax) {
+    elNumHumanMicroPauseMax.value = data.human_micro_pause_max != null ? data.human_micro_pause_max : 3.0;
+  }
+
+  if (elNumReactiveSnipeDelay) {
+    elNumReactiveSnipeDelay.value = data.reactive_snipe_delay != null ? data.reactive_snipe_delay : 0.2;
+  }
+  if (elNumHumanSnipeDelay) {
+    elNumHumanSnipeDelay.value = data.snipe_delay != null ? data.snipe_delay : 2.0;
+  }
+  if (elNumReactiveKakeraMinDelay) {
+    elNumReactiveKakeraMinDelay.value = data.reactive_kakera_min_delay != null ? data.reactive_kakera_min_delay : 0.3;
+  }
+  if (elNumReactiveKakeraMaxDelay) {
+    elNumReactiveKakeraMaxDelay.value = data.reactive_kakera_max_delay != null ? data.reactive_kakera_max_delay : 1.0;
+  }
+
+  if (elChkHumanizationMaster) {
+    elChkHumanizationMaster.checked = !!data.humanization_enabled;
   }
   if (elNumHumanWindowMins) elNumHumanWindowMins.value = data.humanization_window_minutes != null ? data.humanization_window_minutes : 40;
   if (elNumHumanInactivitySecs) elNumHumanInactivitySecs.value = data.humanization_inactivity_seconds != null ? data.humanization_inactivity_seconds : 5;
+  if (elTxtScheduledRollTimes) {
+    elTxtScheduledRollTimes.value = Array.isArray(data.scheduled_roll_times) ? data.scheduled_roll_times.join(", ") : "";
+  }
+
+  sleepWindows = [];
+  if (Array.isArray(data.inactive_hours)) {
+    data.inactive_hours.forEach(entry => {
+      if (Array.isArray(entry) && entry.length === 2) {
+        const s = normalizeClockValue(entry[0]);
+        const e = normalizeClockValue(entry[1]);
+        if (s && e && s !== e) sleepWindows.push([s, e]);
+      }
+    });
+  }
+  renderAllHumanizationChips();
 
   // Settings
   elCfgWebhookUrl.value = data.webhook_url || "";
@@ -1160,34 +1508,129 @@ function handleSaveAutomation() {
   current.auto_p_enabled = elChkAutoDailies.checked;
   if (elChkPauseOnKeyLimit) current.pause_on_key_limit = elChkPauseOnKeyLimit.checked;
 
-  if (elTxtInactiveHours) {
-    const hours = [];
-    elTxtInactiveHours.value.split(",").forEach(part => {
-      const p = part.trim();
-      if (!p) return;
-      if (p.includes("-")) {
-        const [start, end] = p.split("-").map(x => parseInt(x.trim(), 10));
-        if (!isNaN(start) && !isNaN(end)) {
-          for (let h = start; h <= end; h++) {
-            if (h >= 0 && h <= 23 && !hours.includes(h)) hours.push(h);
-          }
-        }
-      } else {
-        const h = parseInt(p, 10);
-        if (!isNaN(h) && h >= 0 && h <= 23 && !hours.includes(h)) hours.push(h);
-      }
-    });
-    current.inactive_hours = hours;
-  }
-  if (elNumHumanWindowMins) current.humanization_window_minutes = Math.max(5, parseInt(elNumHumanWindowMins.value, 10) || 40);
-  if (elNumHumanInactivitySecs) current.humanization_inactivity_seconds = Math.max(0, parseInt(elNumHumanInactivitySecs.value, 10) || 5);
-
   saveActivePreset(current);
 }
 
 elBtnSaveAutomation.addEventListener("click", handleSaveAutomation);
 if (elBtnSaveAutomationTop) {
   elBtnSaveAutomationTop.addEventListener("click", handleSaveAutomation);
+}
+
+// Keep Humanization Master Toggles Synced Across Config & Humanization Tabs
+if (elCfgHumanizationEnabled && elChkHumanizationMaster) {
+  elCfgHumanizationEnabled.addEventListener("change", () => {
+    elChkHumanizationMaster.checked = elCfgHumanizationEnabled.checked;
+  });
+  elChkHumanizationMaster.addEventListener("change", () => {
+    elCfgHumanizationEnabled.checked = elChkHumanizationMaster.checked;
+  });
+}
+
+// Save Humanization Settings
+function handleSaveHumanization() {
+  const current = allPresets[activePresetName] || {};
+
+  // Auto-commit any un-added text in the pool inputs before saving
+  if (elInputAddClaimChatMsg && elInputAddClaimChatMsg.value.trim()) {
+    addMessagesToPool(claimChatMessages, elInputAddClaimChatMsg.value);
+    elInputAddClaimChatMsg.value = "";
+  }
+  if (elInputAddKakeraSnipeMsg && elInputAddKakeraSnipeMsg.value.trim()) {
+    addMessagesToPool(kakeraSnipeChatMessages, elInputAddKakeraSnipeMsg.value);
+    elInputAddKakeraSnipeMsg.value = "";
+  }
+  if (elInputAddClaimEmoji && elInputAddClaimEmoji.value.trim()) {
+    addMessagesToPool(claimEmojis, elInputAddClaimEmoji.value);
+    elInputAddClaimEmoji.value = "";
+  }
+  if (elInputAddSleepWindow && elInputAddSleepWindow.value.trim()) {
+    const extraSleep = parseSleepWindowEntry(elInputAddSleepWindow.value);
+    extraSleep.forEach(pair => {
+      const exists = sleepWindows.some(w => Array.isArray(w) && w[0] === pair[0] && w[1] === pair[1]);
+      if (!exists) sleepWindows.push(pair);
+    });
+    elInputAddSleepWindow.value = "";
+  }
+
+  // 1. Post-Claim Chat & Peer Detection
+  if (elChkEnableClaimChat) current.enable_claim_chat_messages = elChkEnableClaimChat.checked;
+  if (elChkClaimChatOnlyWhenOthersActive) current.claim_chat_only_when_others_active = elChkClaimChatOnlyWhenOthersActive.checked;
+  if (elNumClaimChatOtherUserWindowMins) {
+    current.claim_chat_other_user_window_minutes = Math.max(0, parseFloat(elNumClaimChatOtherUserWindowMins.value) || 0);
+  }
+  if (elNumClaimChatProbability) {
+    current.claim_chat_probability = Math.min(100, Math.max(0, parseFloat(elNumClaimChatProbability.value) || 100));
+  }
+  if (elNumClaimChatMinDelay) {
+    current.claim_chat_min_delay = Math.max(0.2, parseFloat(elNumClaimChatMinDelay.value) || 1.8);
+  }
+  if (elNumClaimChatMaxDelay) {
+    current.claim_chat_max_delay = Math.max(current.claim_chat_min_delay || 1.8, parseFloat(elNumClaimChatMaxDelay.value) || 4.2);
+  }
+  if (elNumClaimChatMinKakera) {
+    current.claim_chat_min_kakera = Math.max(0, parseInt(elNumClaimChatMinKakera.value, 10) || 0);
+  }
+  if (elChkClaimChatOwnRolls) current.claim_chat_on_own_rolls = elChkClaimChatOwnRolls.checked;
+  if (elChkClaimChatSnipes) current.claim_chat_on_snipes = elChkClaimChatSnipes.checked;
+  if (elChkHumanTypingIndicator) current.human_typing_indicator = elChkHumanTypingIndicator.checked;
+
+  current.claim_chat_messages = [...claimChatMessages];
+  // Sync legacy snipe_chat_messages for full compatibility
+  current.snipe_chat_messages = [...claimChatMessages];
+  current.enable_snipe_chat_reactions = !!(current.enable_claim_chat_messages && current.claim_chat_on_snipes);
+
+  // 2. Kakera Snipe Chat & Claim Emoji Pool
+  if (elChkEnableKakeraSnipeChat) current.enable_kakera_snipe_chat_reactions = elChkEnableKakeraSnipeChat.checked;
+  if (elChkKakeraSnipeOnlyWhenOthersActive) current.kakera_snipe_only_when_others_active = elChkKakeraSnipeOnlyWhenOthersActive.checked;
+  current.kakera_snipe_chat_messages = [...kakeraSnipeChatMessages];
+  current.claim_emojis = claimEmojis.length ? [...claimEmojis] : [...DEFAULT_CLAIM_EMOJIS];
+  if (elChkAutoBirthdayCandles) current.auto_birthday_candles = elChkAutoBirthdayCandles.checked;
+
+  // 3. Roll Speed Jitter, Micro-Pauses & Reflex Delays
+  if (elChkHumanMicroPause) current.human_micro_pause_enabled = elChkHumanMicroPause.checked;
+  if (elNumRollSpeedJitterPct) current.roll_speed_jitter_pct = Math.min(80, Math.max(0, parseFloat(elNumRollSpeedJitterPct.value) || 0));
+  if (elNumHumanMicroPauseChance) current.human_micro_pause_chance = Math.min(80, Math.max(0, parseFloat(elNumHumanMicroPauseChance.value) || 8));
+  if (elNumHumanMicroPauseMin) current.human_micro_pause_min = Math.max(0.1, parseFloat(elNumHumanMicroPauseMin.value) || 1.2);
+  if (elNumHumanMicroPauseMax) {
+    current.human_micro_pause_max = Math.max(current.human_micro_pause_min || 1.2, parseFloat(elNumHumanMicroPauseMax.value) || 3.0);
+  }
+
+  if (elNumReactiveSnipeDelay) current.reactive_snipe_delay = Math.max(0, parseFloat(elNumReactiveSnipeDelay.value) || 0);
+  if (elNumHumanSnipeDelay) {
+    current.snipe_delay = Math.max(0, parseFloat(elNumHumanSnipeDelay.value) || 0);
+    if (elCfgSnipeDelay) elCfgSnipeDelay.value = current.snipe_delay;
+  }
+  if (elNumReactiveKakeraMinDelay) current.reactive_kakera_min_delay = Math.max(0, parseFloat(elNumReactiveKakeraMinDelay.value) || 0.3);
+  if (elNumReactiveKakeraMaxDelay) {
+    current.reactive_kakera_max_delay = Math.max(current.reactive_kakera_min_delay || 0.3, parseFloat(elNumReactiveKakeraMaxDelay.value) || 1.0);
+  }
+
+  // 4. Cycle Timing Jitter, Active Conversation Quiet-Wait & Sleep Windows
+  if (elChkHumanizationMaster) {
+    current.humanization_enabled = elChkHumanizationMaster.checked;
+    if (elCfgHumanizationEnabled) elCfgHumanizationEnabled.checked = elChkHumanizationMaster.checked;
+  }
+  if (elNumHumanWindowMins) current.humanization_window_minutes = Math.max(0, parseInt(elNumHumanWindowMins.value, 10) || 40);
+  if (elNumHumanInactivitySecs) current.humanization_inactivity_seconds = Math.max(0, parseInt(elNumHumanInactivitySecs.value, 10) || 5);
+
+  if (elTxtScheduledRollTimes) {
+    const schedList = elTxtScheduledRollTimes.value
+      .split(",")
+      .map(s => normalizeClockValue(s))
+      .filter(Boolean);
+    current.scheduled_roll_times = schedList;
+  }
+
+  current.inactive_hours = sleepWindows.map(pair => [pair[0], pair[1]]);
+
+  saveActivePreset(current);
+}
+
+if (elBtnSaveHumanization) {
+  elBtnSaveHumanization.addEventListener("click", handleSaveHumanization);
+}
+if (elBtnSaveHumanizationTop) {
+  elBtnSaveHumanizationTop.addEventListener("click", handleSaveHumanization);
 }
 
 // Save General Settings

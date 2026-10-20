@@ -99,9 +99,20 @@ class WebServerContext:
         # Track structured session telemetry
         if event_type == "claim" and isinstance(data, dict):
             self.session_claims_count += 1
+            ka_val = data.get("kakera")
+            if ka_val is None:
+                ka_val = data.get("value")
+            if ka_val is None and "raw" in data:
+                m = re.search(r"\((\d+)\s*ka\)", str(data.get("raw", "")))
+                if m:
+                    ka_val = int(m.group(1))
             self.claims_history.appendleft({
                 "timestamp": now_iso,
                 "character": data.get("character") or data.get("message") or "Character Claimed",
+                "value": ka_val,
+                "kakera": ka_val,
+                "reason": "sniped" if data.get("snipe") else "claimed",
+                "source": data.get("source") or "",
                 "raw": data.get("raw") or data.get("message") or "",
             })
         elif event_type == "kakera" and isinstance(data, dict):
@@ -235,7 +246,7 @@ class WebServerContext:
             "wishlist_count": len(getattr(client, "wishlist", [])) if is_connected else 0,
             "session_claims_count": self.session_claims_count,
             "session_kakera_total": self.session_kakera_total,
-            "recent_claims": list(self.claims_history)[:15],
+            "recent_claims": list(getattr(client, "recent_claims", None) or self.claims_history)[:15],
             "recent_kakera": list(self.kakera_history)[:15],
             "memory_mb": metrics["memory_mb"],
             "cpu_percent": metrics["cpu_percent"],

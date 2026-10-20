@@ -98,6 +98,14 @@
         <span>automation</span>
       </button>
 
+      <button class="subnav-tab" data-tab="tab-humanization">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+          <circle cx="12" cy="7" r="4"></circle>
+        </svg>
+        <span>humanization</span>
+      </button>
+
       <button class="subnav-tab" data-tab="tab-discovery">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="10"></circle>
@@ -1014,36 +1022,298 @@
               </label>
             </div>
           </div>
+        </div>
 
-          <!-- 14. Humanization & Sleep / Inactive Hours -->
+        <div class="card-footer-bar">
+          <button id="btnSaveAutomation" class="btn-ptero-primary">save automation settings</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- 5. HUMANIZATION TAB -->
+    <main id="tab-humanization" class="tab-pane">
+      <div class="ptero-card">
+        <div class="card-header-bar">
+          <div class="header-titles">
+            <h2>humanization &amp; anti-detection suite</h2>
+            <p>configure post-claim social chat, active-user presence detection, natural roll jitter, hesitation micro-pauses, and sleep schedules.</p>
+          </div>
+          <div class="header-actions">
+            <button id="btnSaveHumanizationTop" class="btn-ptero-primary">save humanization settings</button>
+          </div>
+        </div>
+
+        <div class="config-section-label">1. post-claim randomized chat &amp; active-peer detection</div>
+        <div class="humanization-hero-grid">
+          <!-- Post-Claim Chat Behavior & Peer Detector -->
           <div class="feature-box">
             <div class="feature-box-top">
               <div class="feature-box-info">
-                <h3>human sleep schedule &amp; anti-detection</h3>
-                <p>configure quiet hours where the bot pauses active commands and humanization timing windows.</p>
+                <h3>post-claim randomized message</h3>
+                <p>sends a natural, randomized message from your pool after claiming a character.</p>
               </div>
+              <label class="switch">
+                <input type="checkbox" id="chkEnableClaimChat">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <div class="feature-box-controls">
+              <label class="ptero-checkbox-card highlight-card">
+                <input type="checkbox" id="chkClaimChatOnlyWhenOthersActive" checked>
+                <div>
+                  <strong>only message if another user (not you or mudae) talked recently</strong>
+                  <span>detects if any other human user sent a message in the channel before chatting after a claim — prevents talking to yourself in an empty channel.</span>
+                </div>
+              </label>
+
+              <div class="ptero-subgrid-2 mt-2">
+                <div class="ctrl-group">
+                  <label>other-user activity window (mins, 0 = any recent)</label>
+                  <input type="number" id="numClaimChatOtherUserWindowMins" class="ptero-input-sm" min="0" max="1440" value="15">
+                </div>
+                <div class="ctrl-group">
+                  <label>message trigger chance (%)</label>
+                  <input type="number" id="numClaimChatProbability" class="ptero-input-sm" min="1" max="100" value="100">
+                </div>
+              </div>
+
+              <div class="ptero-subgrid-2">
+                <div class="ctrl-group">
+                  <label>min typing delay after claim (sec)</label>
+                  <input type="number" step="0.1" id="numClaimChatMinDelay" class="ptero-input-sm" min="0.5" max="30" value="1.8">
+                </div>
+                <div class="ctrl-group">
+                  <label>max typing delay after claim (sec)</label>
+                  <input type="number" step="0.1" id="numClaimChatMaxDelay" class="ptero-input-sm" min="0.5" max="60" value="4.2">
+                </div>
+              </div>
+
+              <div class="ctrl-group">
+                <label>minimum character kakera to chat (0 = all claims; wishes always qualify)</label>
+                <input type="number" id="numClaimChatMinKakera" class="ptero-input-sm" min="0" value="0">
+              </div>
+
+              <div class="ptero-subgrid-2 mt-2">
+                <label class="ptero-checkbox">
+                  <input type="checkbox" id="chkClaimChatOwnRolls" checked>
+                  <span>chat on own-roll claims</span>
+                </label>
+                <label class="ptero-checkbox">
+                  <input type="checkbox" id="chkClaimChatSnipes" checked>
+                  <span>chat on external snipes</span>
+                </label>
+              </div>
+
+              <label class="ptero-checkbox mt-2">
+                <input type="checkbox" id="chkHumanTypingIndicator" checked>
+                <span>simulate discord "is typing..." indicator before sending chat message</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Post-Claim Message Pool Manager -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>post-claim message pool (<span id="countClaimChatMsgs">0</span>)</h3>
+                <p>supports plain messages or dynamic tags: <code>{char}</code>, <code>{series}</code>, <code>{kakera}</code>.</p>
+              </div>
+              <button type="button" id="btnClearClaimChatMsgs" class="btn-ptero-subtle btn-xs">clear pool</button>
+            </div>
+
+            <div class="chip-input-row">
+              <input type="text" id="inputAddClaimChatMsg" class="ptero-input-sm flex-1" placeholder="add message (e.g. gg, nice {char}, lets gooo)...">
+              <button type="button" id="btnAddClaimChatMsg" class="btn-ptero-secondary btn-xs">add</button>
+            </div>
+
+            <div class="preset-pack-row">
+              <span class="field-hint">quick packs:</span>
+              <button type="button" class="btn-ptero-subtle btn-xs" id="btnPackCasual">+ casual</button>
+              <button type="button" class="btn-ptero-subtle btn-xs" id="btnPackHype">+ hype</button>
+              <button type="button" class="btn-ptero-subtle btn-xs" id="btnPackMinimal">+ minimal</button>
+              <button type="button" class="btn-ptero-subtle btn-xs" id="btnPackDynamic">+ {char} tags</button>
+            </div>
+
+            <div id="chipsClaimChatMessages" class="chips-container mt-2"></div>
+          </div>
+        </div>
+
+        <div class="config-section-label mt-3">2. kakera snipe chat &amp; emoji variety</div>
+        <div class="automation-cards-grid">
+          <!-- Kakera Snipe Chat Reactions -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>kakera snipe chat (<span id="countKakeraSnipeMsgs">0</span>)</h3>
+                <p>send a randomized message after sniping kakera from another user's roll.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chkEnableKakeraSnipeChat">
+                <span class="slider"></span>
+              </label>
             </div>
             <div class="feature-box-controls">
-              <div class="ctrl-group">
-                <label>inactive sleep hours (0-23, comma or range e.g. 2,3,4,5)</label>
-                <input type="text" id="txtInactiveHours" class="ptero-input-sm" placeholder="e.g. 2, 3, 4, 5, 6">
+              <label class="ptero-checkbox">
+                <input type="checkbox" id="chkKakeraSnipeOnlyWhenOthersActive" checked>
+                <span>only send if another user talked recently in channel</span>
+              </label>
+              <div class="chip-input-row mt-2">
+                <input type="text" id="inputAddKakeraSnipeMsg" class="ptero-input-sm flex-1" placeholder="add kakera snipe message (e.g. ty, free kakera)...">
+                <button type="button" id="btnAddKakeraSnipeMsg" class="btn-ptero-secondary btn-xs">add</button>
+                <button type="button" id="btnClearKakeraSnipeMsgs" class="btn-ptero-subtle btn-xs">clear</button>
+              </div>
+              <div id="chipsKakeraSnipeChatMessages" class="chips-container"></div>
+            </div>
+          </div>
+
+          <!-- Claim Reaction Emoji Pool & Birthday Candles -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>claim reaction emoji pool (<span id="countClaimEmojis">0</span>)</h3>
+                <p>randomized emojis used when claiming characters via reaction fallback.</p>
+              </div>
+              <button type="button" id="btnResetClaimEmojis" class="btn-ptero-subtle btn-xs">reset default</button>
+            </div>
+            <div class="feature-box-controls">
+              <div class="chip-input-row">
+                <input type="text" id="inputAddClaimEmoji" class="ptero-input-sm flex-1" placeholder="add emoji (e.g. 💖, 🔥, ✨)...">
+                <button type="button" id="btnAddClaimEmoji" class="btn-ptero-secondary btn-xs">add</button>
+              </div>
+              <div id="chipsClaimEmojis" class="chips-container"></div>
+              <label class="ptero-checkbox mt-2">
+                <input type="checkbox" id="chkAutoBirthdayCandles" checked>
+                <span>click mudae birthday candles (🕯️) with humanized delay (0.5s–2.0s)</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="config-section-label mt-3">3. roll cadence, hesitation micro-pauses &amp; button reflexes</div>
+        <div class="automation-cards-grid">
+          <!-- Roll Speed Jitter & Micro-Pauses -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>roll speed jitter &amp; reading micro-pauses</h3>
+                <p>breaks robotic fixed-interval rolling with natural variance and occasional card-reading pauses.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chkHumanMicroPause">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="feature-box-controls">
+              <div class="ptero-subgrid-2">
+                <div class="ctrl-group">
+                  <label>roll speed jitter (±% variance)</label>
+                  <input type="number" id="numRollSpeedJitterPct" class="ptero-input-sm" min="0" max="80" value="20">
+                </div>
+                <div class="ctrl-group">
+                  <label>micro-pause chance per roll (%)</label>
+                  <input type="number" id="numHumanMicroPauseChance" class="ptero-input-sm" min="1" max="50" value="8">
+                </div>
               </div>
               <div class="ptero-subgrid-2">
                 <div class="ctrl-group">
-                  <label>humanization window (min)</label>
-                  <input type="number" id="numHumanWindowMins" class="ptero-input-sm" min="5" max="55" value="40">
+                  <label>micro-pause min duration (sec)</label>
+                  <input type="number" step="0.1" id="numHumanMicroPauseMin" class="ptero-input-sm" min="0.2" max="15" value="1.2">
                 </div>
                 <div class="ctrl-group">
-                  <label>chat quiet wait (sec)</label>
-                  <input type="number" id="numHumanInactivitySecs" class="ptero-input-sm" min="0" max="60" value="5">
+                  <label>micro-pause max duration (sec)</label>
+                  <input type="number" step="0.1" id="numHumanMicroPauseMax" class="ptero-input-sm" min="0.2" max="30" value="3.0">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Button & Reaction Reflex Delays -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>claim &amp; kakera click reflex delays</h3>
+                <p>humanize reaction speeds on buttons so clicks never look like 0ms frame-perfect scripts.</p>
+              </div>
+            </div>
+            <div class="feature-box-controls">
+              <div class="ptero-subgrid-2">
+                <div class="ctrl-group">
+                  <label>own-roll claim reflex delay (sec)</label>
+                  <input type="number" step="0.05" id="numReactiveSnipeDelay" class="ptero-input-sm" min="0" max="10" value="0.2">
+                </div>
+                <div class="ctrl-group">
+                  <label>external snipe reflex delay (sec)</label>
+                  <input type="number" step="0.1" id="numHumanSnipeDelay" class="ptero-input-sm" min="0" max="30" value="2.0">
+                </div>
+              </div>
+              <div class="ptero-subgrid-2">
+                <div class="ctrl-group">
+                  <label>kakera click min delay (sec)</label>
+                  <input type="number" step="0.05" id="numReactiveKakeraMinDelay" class="ptero-input-sm" min="0" max="10" value="0.3">
+                </div>
+                <div class="ctrl-group">
+                  <label>kakera click max delay (sec)</label>
+                  <input type="number" step="0.05" id="numReactiveKakeraMaxDelay" class="ptero-input-sm" min="0" max="15" value="1.0">
                 </div>
               </div>
             </div>
           </div>
         </div>
 
+        <div class="config-section-label mt-3">4. cycle timing, conversation respect &amp; sleep schedule</div>
+        <div class="automation-cards-grid">
+          <!-- Cycle Timing Jitter & Active Conversation Respect -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>cycle timing jitter &amp; active chat quiet-wait</h3>
+                <p>randomizes when within the hour the bot rolls and waits for active human conversation to pause first.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chkHumanizationMaster">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="feature-box-controls">
+              <div class="ptero-subgrid-2">
+                <div class="ctrl-group">
+                  <label>cycle start jitter window (mins)</label>
+                  <input type="number" id="numHumanWindowMins" class="ptero-input-sm" min="0" max="55" value="40">
+                </div>
+                <div class="ctrl-group">
+                  <label>wait for chat silence (sec)</label>
+                  <input type="number" id="numHumanInactivitySecs" class="ptero-input-sm" min="0" max="120" value="5">
+                </div>
+              </div>
+              <div class="ctrl-group">
+                <label>scheduled daily roll times (optional hh:mm, comma-separated)</label>
+                <input type="text" id="txtScheduledRollTimes" class="ptero-input-sm" placeholder="e.g. 09:15, 14:30, 21:45">
+              </div>
+            </div>
+          </div>
+
+          <!-- Human Sleep Schedule (Inactive Hours) -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>human sleep schedule (<span id="countSleepWindows">0</span> windows)</h3>
+                <p>time windows where the bot goes completely offline/asleep and pauses rolling.</p>
+              </div>
+              <button type="button" id="btnClearSleepWindows" class="btn-ptero-subtle btn-xs">clear all</button>
+            </div>
+            <div class="feature-box-controls">
+              <div class="chip-input-row">
+                <input type="text" id="inputAddSleepWindow" class="ptero-input-sm flex-1" placeholder="add window (e.g. 02:00-07:30 or 2-7)...">
+                <button type="button" id="btnAddSleepWindow" class="btn-ptero-secondary btn-xs">add window</button>
+              </div>
+              <div id="chipsSleepWindows" class="chips-container"></div>
+            </div>
+          </div>
+        </div>
+
         <div class="card-footer-bar">
-          <button id="btnSaveAutomation" class="btn-ptero-primary">save automation settings</button>
+          <button id="btnSaveHumanization" class="btn-ptero-primary">save humanization settings</button>
         </div>
       </div>
     </main>

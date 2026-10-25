@@ -1,442 +1,187 @@
 <p align="center">
-  <img src="icon.png" alt="MudaRemote" width="120">
-
-  <h1 align="center">⚡ MudaRemote</h1>
-
+  <h1 align="center">⚡ MudaDemote</h1>
   <p align="center">
-    Mudae automation without babysitting config files all day
+    <strong>high-performance, 24/7 headless discord automation daemon &amp; web dashboard for mudae</strong>
+  </p>
+  <p align="center">
+    engineered for 24/7 server deployments (aws ec2 / linux systemd / docker / local) with zero desktop gui dependencies.
   </p>
 </p>
 
 <p align="center">
-  <a href="https://github.com/misutesu-desu/MudaRemote/releases/latest"><img src="https://img.shields.io/badge/Download-Windows_.exe-0078D6?style=for-the-badge&logo=windows&logoColor=white"></a>
-  <a href="https://discord.gg/4WHXkDzuZx"><img src="https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white"></a>
-  <a href="https://github.com/misutesu-desu/MudaRemote/stargazers"><img src="https://img.shields.io/github/stars/misutesu-desu/MudaRemote?style=for-the-badge&logo=github&color=f5c518"></a>
-  <a href="https://github.com/sponsors/misutesu-desu"><img src="https://img.shields.io/badge/Support-%E2%9D%A4-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white"></a>
-</p>
-
-<p align="center">
-  <a href="README.fr.md">Français</a> •
-  <a href="README.ja.md">日本語</a> •
-  <a href="README.ko.md">한국어</a> •
-  <a href="README.tr.md">Türkçe</a> •
-  <a href="README.zh-CN.md">简体中文</a> •
-  <a href="README.pt-BR.md">Português Brasileiro</a>
-</p>
-
-<p align="center">
-  <img src="screenshots/editor.png" alt="MudaRemote editor" width="820">
+  <img src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.14-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python Version">
+  <img src="https://img.shields.io/badge/platform-linux%20%7C%20aws%20ec2%20%7C%20windows-0078D6?style=for-the-badge&logo=linux&logoColor=white" alt="Platform">
+  <img src="https://img.shields.io/badge/ui-pterodactyl%20off--white-0969da?style=for-the-badge&logo=pterodactyl&logoColor=white" alt="Dashboard UI">
+  <img src="https://img.shields.io/badge/telemetry-live%20websocket-22c55e?style=for-the-badge&logo=websocket&logoColor=white" alt="WebSocket Telemetry">
+  <img src="https://img.shields.io/badge/license-MIT-yellow?style=for-the-badge" alt="License">
 </p>
 
 ---
 
-MudaRemote handles the repetitive parts of Mudae for you.
+## 📖 Overview
 
-Rolls, claims, Kakera, wishlists, `$mk`, `$rt`, multiple accounts and a bunch of the annoying little cases that come with trying to automate Mudae reliably.
+**MudaDemote** is a modern fork of MudaRemote rebuilt specifically for **headless 24/7 operation** on cloud virtual servers (AWS EC2, VPS, Debian/Ubuntu) and local background tasks.
 
-If you're on Windows you can just download the `.exe`, open it and set everything up from the interface. You don't need Python and you don't need to edit JSON files just to get started.
-
-Don't want to leave your PC on all day? There's also an optional cloud version, **MudaRemote Pro**, that runs the bot on a server for you. More about it [further down](https://github.com/misutesu-desu/MudaRemote#mudaremote-pro-closed-beta).
+It replaces heavy local desktop GUIs with a sleek, low-latency, off-white **Pterodactyl-inspired Web Dashboard** (`aiohttp` + WebSocket). You get real-time terminal streaming, live power controls, instant hot-reloading preset configuration, multi-server channel routing, advanced humanization behaviors, and full mobile optimization.
 
 > [!WARNING]
-> MudaRemote is a self-bot. Self-bots are against Discord's Terms of Service and using one can get your account banned.
->
-> There is no magic "safe mode" that makes a self-bot undetectable. Use it at your own risk and preferably not on an account you aren't willing to lose.
-
-## ❤️ If you use MudaRemote a lot
-
-MudaRemote is free and open source and I want to keep it that way.
-
-The app you download here isn't a trial and I'm not planning to lock its features behind a subscription. **MudaRemote Pro** (see below) is a separate, optional cloud add-on on top of it, it doesn't take anything away from the free app.
-
-I spend quite a bit of my free time fixing weird Mudae behavior, Discord changes, regressions, packaging problems and whatever new edge case somebody manages to find in the Discord server.
-
-So if MudaRemote has been useful to you and you feel like helping me keep working on it, you can sponsor me here:
-
-### [❤️ Support MudaRemote on GitHub Sponsors](https://github.com/sponsors/misutesu-desu)
-
-Even $2 genuinely helps. Monthly support is great but one time support is completely fine too.
-
-And seriously, don't feel like you have to pay to use the project. A star, a useful bug report or helping somebody in the Discord server helps as well.
-
-A few people from the community have already chipped in toward the current goal and I'm really grateful for that ❤️
-
-**Current community goal: $60 / $100**
-
-Sponsors can also ask me for the **Donator** role in the MudaRemote Discord server.
-
-During the closed beta of **MudaRemote Pro** (see below), donors are also the people who can use it.
-
-<details>
-<summary>Prefer crypto?</summary>
-
-<br>
-
-That's fine too.
-
-| Asset    | Network    | Address                              |
-| :------- | :--------- | :----------------------------------- |
-| Litecoin | Litecoin   | `LM16i4Sf34zmnGU35AuCmtyMSL3M4Nfutt` |
-| USDT     | TRON TRC20 | `TQWeEprEbJyk1EcSHDk1pnn7rkgcsTBazp` |
-
-If you want the Donator role after sending crypto, DM me on Discord with the transaction ID or a screenshot.
-
-You can hide unrelated wallet information.
-
-Never send anyone your seed phrase or private key.
-
-</details>
+> **self-bot disclaimer**: automated discord accounts violate discord's terms of service. use at your own discretion on accounts you can afford to lose. mudademote includes extensive humanization behaviors to blend with natural chatter, but no self-bot is ever 100% immune to detection.
 
 ---
 
-## So what does it actually do?
+## ✨ Key Features
 
-A lot at this point 😅
-
-The short version:
-
-* 🎲 rolls automatically
-* 💍 claims characters based on your rules
-* 🎯 watches wishlists and series
-* 💎 collects the Kakera you want
-* 🔋 keeps track of Kakera power
-* ♻️ handles `$dk`, `$rt`, `$us`, `$mk` and related flows
-* 👥 can run and coordinate multiple presets
-* 🕒 supports schedules and different roll timings
-* 💤 can stay inactive during configured hours
-* 💬 can wait when people are actively talking in the channel
-* 🖥️ most settings are available through the desktop interface
-* 🔄 checks for updates when the app starts
-
-There are a lot more settings than that but you don't need to understand all of them before using the app.
+### 🖥️ Pterodactyl-Inspired Web Dashboard
+- **clean off-white aesthetic**: uncluttered, minimalist dashboard with lowercase typography and intuitive card layouts.
+- **live websocket console**: real-time log streaming with instant log-level filtering (`all`, `info`, `claim`, `kakera`, `warn`, `error`), live search, auto-scroll, and log export.
+- **live telemetry cards**: Kakera Power % gauge, Rolls Left counter with reset countdown, Claim Cooldown timer with `$rt` readiness indicator, and server allocation metrics.
+- **recent activity feeds**: tracks character claims with verified **kakera values** (`+450 ka`) and kakera reaction gains in real-time.
+- **live hot-reloading**: save settings or modify whitelists on the fly—the running bot updates immediately without restart.
+- **100% mobile optimized**: touch-friendly 4-column power controls, swipeable tab navigation, 2×2 metrics overview, and responsive single-column form collapse.
 
 ---
 
-## 🚀 Getting started on Windows
-
-The easiest way to use MudaRemote is the standalone Windows build.
-
-### 1. Download it
-
-**[⬇️ Download the latest MudaRemote.exe](https://github.com/misutesu-desu/MudaRemote/releases/latest)**
-
-You don't need to install Python for this version.
-
-### 2. Put it somewhere
-
-Create a folder for MudaRemote and put the `.exe` inside it.
-
-Desktop is fine.
-
-### 3. Open it
-
-Double click `MudaRemote.exe`.
-
-Quick Setup will ask for the important stuff first.
-
-You'll mainly need:
-
-* your Discord token
-* the channel you want to use
-* what kind of rolls you want
-* what you want MudaRemote to claim
-* which Kakera you want it to collect
-
-### 4. Save and start
-
-Check the summary and hit:
-
-**▶ Save & Start Bot**
-
-That's basically it.
-
-You can mess with all the more specific settings later.
+### 🧠 Humanization & Anti-Detection Suite
+- **post-claim randomized chat pool**: send natural reactions after claims with dynamic tags: `{char}`, `{series}`, and `{kakera}`.
+- **active-peer presence detection**: toggle `claim_chat_only_when_others_active` to only speak if another human user talked in the channel within a configurable lookback window—preventing speaking into an empty channel.
+- **simulated discord typing indicator**: triggers Discord's native `"is typing..."` indicator for a realistic duration before sending chat reactions.
+- **kakera snipe chat reactions**: randomized congratulatory or stealth snipes after claiming kakera from external users' rolls.
+- **roll cadence jitter & reading micro-pauses**: randomizes interval delays (`±%`) around base roll speed and simulates natural pauses to "read" character embeds.
+- **button reflex delays**: humanized click delays on claim and kakera buttons to prevent 0ms superhuman reaction flags.
+- **human sleep schedules**: specify inactive time windows (e.g. `02:00–07:30`) where the bot goes completely dark.
 
 ---
 
-## 🎯 Claims
-
-MudaRemote doesn't just click every character it sees.
-
-You can decide what is worth claiming.
-
-It supports things like:
-
-* wishlist characters
-* specific series
-* minimum Kakera value
-* rank filters
-* ownership filters
-* avoid lists
-* own-roll-only rules
-* instant matching claims
-* end of window fallback claims
-* event cards
-
-It can also use `$rt` as part of configured claim flows when another claim right is needed.
+### 📡 Multi-Server Auto-Discovery & Whitelist
+- **gateway server scanning**: automatically inspects all joined guilds via Discord gateway.
+- **per-server channel routing**: assign dedicated roll channels, command channels, and separate snipe / kakera snipe channels per server.
+- **strict whitelist mode**: toggle server permissions individually or isolate bot actions to an active target server.
 
 ---
 
-## 💎 Kakera
-
-You can choose which Kakera MudaRemote should collect and when.
-
-It keeps track of power instead of blindly clicking until you're empty.
-
-There is support for:
-
-* Kakera priority
-* separate power thresholds
-* `$dk`
-* `$mk`
-* MK-only collection
-* Chaos Mode
-* sphere detection
-* `$oh`
-* `$oc`
-* `$oq`
-* `$ot`
-
-If multiple eligible Kakera show up together, MudaRemote can use your configured priority instead of just clicking randomly.
-
-Paid Kakera filters support **All** or **Any** matching across Wish/Starwish, OP Perk 5, MK, Chaos Key, Perk 8 and Shop 7. Chaos Key, Perk 8 and Shop 7 have separate controls. Free green Kakera and free bonus clicks remain eligible when paid filters do not match.
+### ⚙️ 14-Module Automation Engine
+- **auto-badges**: automated `$buy` leveling with optimal order calculation up to Tier 4.
+- **auto-tower**: automatic tower floor building and investment.
+- **daily & power management**: automated `$dk` with customizable power ceilings, `$daily`, `$p`, and reset queries.
+- **kakera orbits**: handles `$oh`, `$oc`, `$oq`, and `$ot` minigames.
+- **emergency hybrid panic claiming**: switches to instant claims on high-kakera or top-ranked characters in the final minutes before hourly reset.
+- **main account sync & kakera giving**: transfers rolls, wishes, and surplus kakera to a designated main account.
+- **character farming & divorce**: automated `$forcedivorce` before rolls or after claims with wish protection.
 
 ---
 
-## 🎲 Rolls
+## 🚀 Quick Start
 
-You can use normal text rolls or supported slash commands.
+### Option A: 24/7 AWS EC2 / Linux Deployment (Recommended)
 
-Examples:
+1. **Clone the repository on your server:**
+   ```bash
+   git clone https://github.com/fizzynob/MudaDemote.git /opt/mudademote
+   cd /opt/mudademote
+   ```
+
+2. **Install Python dependencies:**
+   ```bash
+   sudo apt update && sudo apt install -y python3 python3-pip
+   pip3 install -r requirements.txt
+   ```
+
+3. **Run as a systemd service (auto-restart & boot on startup):**
+   Create `/etc/systemd/system/mudademote.service`:
+   ```ini
+   [Unit]
+   Description=MudaDemote 24/7 Automation Daemon
+   After=network.target
+
+   [Service]
+   Type=simple
+   User=ubuntu
+   WorkingDirectory=/opt/mudademote
+   ExecStart=/usr/bin/python3 mudae_server.py --host 0.0.0.0 --port 8080 --autostart
+   Restart=always
+   RestartSec=5
+   Environment=PYTHONUNBUFFERED=1
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+
+4. **Enable & Start:**
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now mudademote
+   ```
+
+5. **Access the Dashboard:**
+   Open `http://<your-server-ip>:8080` in any desktop or mobile browser.
+
+---
+
+### Option B: Local Machine (Windows / macOS / Linux)
+
+1. **Clone and install dependencies:**
+   ```bash
+   git clone https://github.com/fizzynob/MudaDemote.git
+   cd MudaDemote
+   pip install -r requirements.txt
+   ```
+
+2. **Launch the server:**
+   ```bash
+   python mudae_server.py --host 127.0.0.1 --port 8080
+   ```
+
+3. **Open the Web UI:**
+   Navigate to [http://127.0.0.1:8080](http://127.0.0.1:8080) in your browser. Configure your Discord user token, target roll channel, and hit **Start**.
+
+---
+
+## 🗂️ Project Architecture
 
 ```text
-$wa
-$ha
-$ma
-/wa
+MudaDemote/
+├── mudae_server.py           # server entrypoint (aiohttp web server + daemon supervisor)
+├── mudae_bot.py              # core mudae automation runtime & discord gateway client
+├── mudae_web/
+│   ├── app.py                # REST API, WebSocket handler, and static file router
+│   └── static/
+│       ├── index.html        # pterodactyl-inspired single page web interface
+│       ├── app.js            # frontend reactive controller & websocket manager
+│       └── style.css         # off-white pterodactyl theme & mobile stylesheet
+├── mudae_core/
+│   ├── bot_runtime.py        # multi-instance process supervisor & lifecycle manager
+│   ├── bot_config.py         # live hot-reloadable configuration attributes
+│   ├── config.py             # preset validation, parsing, and serialization
+│   └── activity_events.py    # structured activity log classification & telemetry
+├── tests/                    # unit test suite (898+ automated tests)
+└── version.json              # release integrity manifest & checksums
 ```
 
-Custom roll commands are supported too.
+---
 
-Roll batches can run:
+## 🛡️ Health & Telemetry API
 
-* immediately
-* on a schedule
-* around claim resets
-* after waiting for channel activity to calm down
-* with configurable delays
+MudaDemote exposes lightweight health and status endpoints for uptime monitoring:
 
-You can also keep rolling for keys even when claiming isn't available.
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/healthz` | `GET` | Returns 200 OK with uptime, memory footprint (MB), and CPU % |
+| `/api/status` | `GET` | Complete snapshot of bot state, reset timers, and recent activity |
+| `/api/presets` | `GET/POST` | Fetch or live-update preset configuration |
+| `/api/ws` | `WebSocket` | Real-time terminal log feed and status broadcasts |
 
 ---
 
-## 👥 Multiple accounts
+## 🧪 Testing
 
-MudaRemote can run multiple presets at once.
-
-Each preset keeps its own state but configured accounts can coordinate things like claim reservations and reset information.
-
-This is useful if you're already managing multiple Mudae accounts and don't want to run completely separate copies of everything.
-
----
-
-## 🕒 Timing stuff
-
-There are quite a few timing controls because Mudae automation gets messy very quickly once you stop assuming everything happens at exactly the expected second.
-
-MudaRemote supports:
-
-* random waits
-* scheduled rolls
-* sleep hours
-* channel activity checks
-* claim reset timing
-* maintenance detection
-* slash command fallback
-
-These settings exist to control when the bot acts.
-
-The first `$tu` status query runs promptly. Later queries can use a configurable random wait (default 0–40 minutes). Eligible rolls start after the response once the channel is quiet, without another random wait.
-
-They do **not** make self-botting safe and they do not guarantee protection from Discord bans.
-
----
-
-## MudaRemote Pro (closed beta) ☁️
-
-MudaRemote Pro is for people who'd rather not keep their PC running all day just for Mudae.
-
-Instead of running on your computer, your bot runs on a server. You open the same MudaRemote app, sign in, and check what it's doing from there.
-
-What you get:
-
-* ☁️ your bot keeps rolling and claiming while your PC is off
-* 📜 an activity feed in plain words: what it claimed, what it missed, Kakera it collected, roll rounds and resets
-* 🤖 an AI assistant that sets up your preset: tell it what you want in normal words, it shows you the changes and nothing is applied until you approve them
-* 🔁 if the connection to Discord drops or the bot crashes, it reconnects or restarts by itself
-* 🖥️ Local and Cloud live side by side in the same app, and using MudaRemote locally works exactly like before
-
-The bot itself is still the open source MudaRemote. Pro is the hosted part on top of it.
-
-### How do I get in?
-
-It's a closed beta for now and during the beta it's available to people who support the project, so donors can use it. If you've sponsored me on GitHub or sent crypto, you're who I'm opening it to first ❤️
-
-Access is by request:
-
-1. Ask for your account in `#pro-request` in the [Discord server](https://discord.gg/4WHXkDzuZx) and mention how you supported MudaRemote. You'll get a login and a key from me.
-2. Grab the app from `#pro-download`.
-3. Sign in and put your key in the **Account** tab.
-
-If something breaks, `#pro-support` is the place. Bugs and ideas go in `#pro-feedback` and `#pro-status` tells you whether the server is up.
-
-A few honest things:
-
-* it's a beta, so expect some rough edges. Tell me what you run into and I'll fix it
-* the Windows installer isn't signed yet, so SmartScreen might warn you. Click **More info** and then **Run anyway**
-* your Discord token is stored encrypted on the server
-* a self-bot is still a self-bot. Running it on a server doesn't make it safe or undetectable, the warning at the top applies to Pro too
-
----
-
-## 🔄 Updates
-
-The Windows app checks for updates when it starts.
-
-If a new version exists you'll see the changelog first.
-
-You can install it or keep using your current version.
-
-I don't like apps silently replacing themselves behind your back so the update is still your choice.
-
-MudaRemote also verifies published builds and protects your presets while updating.
-
-Windows and Android offer a stable/beta update toggle and a target version picker. You can upgrade, reinstall or return to a chosen release. Android keeps an active session on its current Python engine until you restart it to activate a staged update.
-
----
-
-## 🧑‍💻 Running from source
-
-If you're on Mac/Linux or you just prefer running the Python version:
-
+Run the automated test suite locally:
 ```bash
-git clone https://github.com/misutesu-desu/MudaRemote.git
-cd MudaRemote
-pip install -r requirements.txt
-python mudae_preset_editor.py
+python -m pytest tests/test_server_api.py tests/test_release_manifest.py tests/test_activity_events.py
 ```
-
-Python 3.8+ is required.
-
-You can also start a preset directly:
-
-```bash
-python mudae_preset_editor.py --preset "MyAccount"
-```
-
----
-
-## 🔑 About your Discord token
-
-Your Discord token is basically your Discord password.
-
-Treat it like one.
-
-Don't post it in issues.
-
-Don't send it to people in the Discord server.
-
-Don't send it to me either.
-
-MudaRemote stores tokens separately from your normal preset configuration.
-
-On Windows it uses DPAPI encryption.
-
-macOS and Linux use the system keyring where available.
-
-Termux uses app-private storage with restricted permissions.
-
-If you're not sure how to get your token or set things up, check the wiki or ask in the Discord server.
-
----
-
-## 💬 Discord
-
-There are **310+ people** in the MudaRemote Discord now.
-
-People use it for:
-
-* setup help
-* reporting bugs
-* comparing settings
-* requesting features
-* testing beta versions
-* figuring out why Mudae decided to do something weird again
-
-### [💬 Join the MudaRemote Discord](https://discord.gg/4WHXkDzuZx)
-
-If something is broken, reporting it properly helps me much more than just saying "bot doesn't work" 😭
-
-Useful links:
-
-* 📖 [Troubleshooting & FAQ](https://github.com/misutesu-desu/MudaRemote/wiki/Troubleshooting)
-* ⚙️ [Configuration Guide](https://github.com/misutesu-desu/MudaRemote/wiki/Configuration-Guide)
-* 🐛 [Report a Bug](https://github.com/misutesu-desu/MudaRemote/issues)
-
----
-
-## ⭐ Help other people find it
-
-GitHub stars aren't money but they actually do help.
-
-More stars means more people find the repo, more people test it and more bugs get found before they hit everyone else.
-
-So if you've been using MudaRemote for a while:
-
-### [⭐ Star MudaRemote](https://github.com/misutesu-desu/MudaRemote)
-
-And if the project has saved you enough time that you want to throw a couple bucks my way:
-
-### [❤️ Sponsor me on GitHub](https://github.com/sponsors/misutesu-desu)
-
-No pressure either way.
-
-I'm just glad people are actually using this thing.
 
 ---
 
 ## 📜 License
 
-MudaRemote is released under the MIT License.
-
-You're free to use, modify and redistribute it under the terms of the license.
-
-See [LICENSE](LICENSE).
-
----
-
-## ⚠️ One last reminder
-
-MudaRemote is a self-bot.
-
-Self-bots violate Discord's Terms of Service.
-
-Using one can result in things like:
-
-* your Discord account being banned
-* removal from servers
-* losing access to your Mudae progress
-
-I can't guarantee your account will be safe and I can't take responsibility for what happens to an account using MudaRemote.
-
-Use it because you understand the risk, not because somebody told you it's undetectable.
-
----
-
-<p align="center">
-  ⭐ If MudaRemote saved you some time, a star on GitHub helps other people find it.
-</p>
-
-<p align="center">
-  made by someone who got tired of doing repetitive Mudae stuff manually ❤️
-</p>
+Released under the [MIT License](LICENSE).
+Made with ❤️ for headless 24/7 Mudae automation.

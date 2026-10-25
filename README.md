@@ -11,7 +11,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.14-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python Version">
   <img src="https://img.shields.io/badge/platform-linux%20%7C%20aws%20ec2%20%7C%20windows-0078D6?style=for-the-badge&logo=linux&logoColor=white" alt="Platform">
-  <img src="https://img.shields.io/badge/ui-pterodactyl%20off--white-0969da?style=for-the-badge&logo=pterodactyl&logoColor=white" alt="Dashboard UI">
+  <img src="https://img.shields.io/badge/ui-i want to die%20off--white-0969da?style=for-the-badge&logo=pterodactyl&logoColor=white" alt="Dashboard UI">
   <img src="https://img.shields.io/badge/telemetry-live%20websocket-22c55e?style=for-the-badge&logo=websocket&logoColor=white" alt="WebSocket Telemetry">
   <img src="https://img.shields.io/badge/license-MIT-yellow?style=for-the-badge" alt="License">
 </p>

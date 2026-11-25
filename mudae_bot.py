@@ -231,7 +231,7 @@ def _bootstrap_modular_core():
 
 try:
     from mudae_core import (
-        ClaimCoordinator, ClaimOutcome, CommandPacer, GlobalIntervalCoordinator, SecretStore, ServerResetCoordinator, UpdateError, apply_update, discover_update_manifest, get_update_manifest_url, recover_interrupted_update,
+        ClaimCoordinator, ClaimOutcome, CommandPacer, GlobalIntervalCoordinator, MainAccountCooldownTracker, SecretStore, ServerResetCoordinator, UpdateError, apply_update, discover_update_manifest, get_update_manifest_url, recover_interrupted_update,
         active_stagger_seconds, normal_roll_behavior_flags, lurker_window_state, basic_panic_claim_fallback_is_active, can_resume_claim_interrupted_rolls, can_spend_restore_on_character, calculate_kakera_power_cost, classify_claim_owner, classify_claim_text, clear_status_dirty, daily_rolls_decision, ResetAnchor, snap_to_reset_minute, bounded_sanity_deadline, ensure_sanity_deadline_safe, normal_action_status_policy, normal_roll_action_state_is_dirty, defer_normal_roll_window, normal_roll_window_is_deferred, normal_roll_batch_fits_window, normal_roll_start_window, normal_roll_has_usable_window, mk_full_power_wait_is_unchanged, NORMAL_ROLL_PREROLL_RESERVE_SECONDS, ROLL_BOUNDARY_ATTRIBUTION_GUARD_SECONDS, is_roll_result_cross_boundary_ambiguous,
         consume_tu_urgent_bypass, consume_current_tu_urgency_for_backoff,
         cooldown_deadline, defer_tu_queries, dynamic_claim_round, format_update_changelog, has_free_claim_button, initialize_status_tracking,
@@ -274,7 +274,7 @@ except (ModuleNotFoundError, ImportError) as core_error:
         if loaded_module == "mudae_core" or loaded_module.startswith("mudae_core."):
             sys.modules.pop(loaded_module, None)
     from mudae_core import (
-        ClaimCoordinator, ClaimOutcome, CommandPacer, GlobalIntervalCoordinator, SecretStore, ServerResetCoordinator, UpdateError, apply_update, discover_update_manifest, get_update_manifest_url, recover_interrupted_update,
+        ClaimCoordinator, ClaimOutcome, CommandPacer, GlobalIntervalCoordinator, MainAccountCooldownTracker, SecretStore, ServerResetCoordinator, UpdateError, apply_update, discover_update_manifest, get_update_manifest_url, recover_interrupted_update,
         active_stagger_seconds, normal_roll_behavior_flags, lurker_window_state, basic_panic_claim_fallback_is_active, can_resume_claim_interrupted_rolls, can_spend_restore_on_character, calculate_kakera_power_cost, classify_claim_owner, classify_claim_text, clear_status_dirty, daily_rolls_decision, ResetAnchor, snap_to_reset_minute, bounded_sanity_deadline, ensure_sanity_deadline_safe, normal_action_status_policy, normal_roll_action_state_is_dirty, defer_normal_roll_window, normal_roll_window_is_deferred, normal_roll_batch_fits_window, normal_roll_start_window, normal_roll_has_usable_window, mk_full_power_wait_is_unchanged, NORMAL_ROLL_PREROLL_RESERVE_SECONDS, ROLL_BOUNDARY_ATTRIBUTION_GUARD_SECONDS, is_roll_result_cross_boundary_ambiguous,
         consume_tu_urgent_bypass, consume_current_tu_urgency_for_backoff,
         cooldown_deadline, defer_tu_queries, dynamic_claim_round, format_update_changelog, has_free_claim_button, initialize_status_tracking,
@@ -399,6 +399,38 @@ _original_terminal_settings = None
 _claim_coordinator = ClaimCoordinator()
 _server_reset_coordinator = ServerResetCoordinator()
 _tu_interval_coordinator = GlobalIntervalCoordinator()
+_main_cooldown_tracker = MainAccountCooldownTracker()
+
+
+def get_active_main_account_id():
+    """Resolve the active Main Account user ID from preset config or running main client."""
+    with _active_clients_lock:
+        for c in _active_clients:
+            if getattr(c, "account_role", "") == "main":
+                uid = getattr(getattr(c, "user", None), "id", None)
+                if uid:
+                    return str(uid)
+            mid = str(getattr(c, "main_account_id", "") or "").strip()
+            if mid and mid.isdigit():
+                return mid
+    return ""
+
+
+def get_main_cooldown_status(main_account_id=""):
+    """Return live Main Account claim cooldown telemetry for the dashboard."""
+    resolved = str(main_account_id or "").strip() or get_active_main_account_id()
+    with _active_clients_lock:
+        for c in _active_clients:
+            uid = getattr(getattr(c, "user", None), "id", None)
+            if uid and str(uid) == resolved:
+                _main_cooldown_tracker.update_status(
+                    str(uid),
+                    claim_available=bool(getattr(c, "claim_right_available", False)),
+                    cooldown_until_utc=getattr(c, "next_claim_reset_at_utc", None),
+                    source="live-client",
+                )
+                break
+    return _main_cooldown_tracker.get_status(resolved)
 TU_GLOBAL_INTERVAL_SECONDS = 2.0
 # A permanently busy channel must never stall status refreshes (and therefore
 # rolling) forever; after this much cumulative quiet-channel waiting, send $tu
@@ -1414,9 +1446,198 @@ def run_bot(preset_name, preset_data, log_function=print_log):
                 client,
             )
         client._claim_reset_refresh_requested = False
+        publish_own_claim_state_if_main(f"cooldown:{source}")
         if wake:
             wake_status_loop()
         return deadline
+
+    def get_effective_main_account_id() -> str:
+        explicit = str(getattr(client, "main_account_id", "") or "").strip()
+        if explicit.isdigit() and int(explicit) > 0:
+            return explicit
+        with _active_clients_lock:
+            for c in _active_clients:
+                if getattr(c, "account_role", "") == "main":
+                    uid = getattr(getattr(c, "user", None), "id", None)
+                    if uid:
+                        return str(uid)
+        return ""
+
+    def publish_own_claim_state_if_main(reason="status"):
+        own_uid = getattr(getattr(client, "user", None), "id", None)
+        if not own_uid:
+            return
+        main_uid = get_effective_main_account_id()
+        is_main = (getattr(client, "account_role", "") == "main") or (main_uid and str(own_uid) == str(main_uid))
+        if not is_main:
+            return
+        target_uid = main_uid or str(own_uid)
+        if str(own_uid) != str(target_uid):
+            return
+        _main_cooldown_tracker.update_status(
+            str(own_uid),
+            claim_available=bool(getattr(client, "claim_right_available", False)),
+            cooldown_until_utc=getattr(client, "next_claim_reset_at_utc", None),
+            source=reason,
+        )
+
+    def _main_account_identities(guild, main_id: int):
+        identities = []
+        with _active_clients_lock:
+            for c in _active_clients:
+                cu = getattr(c, "user", None)
+                if cu is not None and getattr(cu, "id", None) == main_id:
+                    for attr in ("name", "display_name"):
+                        val = getattr(cu, attr, "")
+                        if val and val not in identities:
+                            identities.append(val)
+        if guild is not None:
+            member = guild.get_member(main_id)
+            if member is not None:
+                for attr in ("name", "display_name"):
+                    val = getattr(member, attr, "")
+                    if val and val not in identities:
+                        identities.append(val)
+        return identities
+
+    def observe_main_account_messages(message):
+        """Observe Mudae messages about Main Account to track its claim cooldown."""
+        if getattr(getattr(message, "author", None), "id", None) != TARGET_BOT_ID:
+            return False
+        main_id_str = get_effective_main_account_id()
+        if not main_id_str or not main_id_str.isdigit():
+            return False
+        main_id = int(main_id_str)
+        own_uid = getattr(getattr(client, "user", None), "id", None)
+        if own_uid is not None and own_uid == main_id:
+            return False  # Own account updates via publish_own_claim_state_if_main
+
+        content = str(getattr(message, "content", "") or "")
+        if not content:
+            return False
+        guild = getattr(message, "guild", None)
+        main_identities = _main_account_identities(guild, main_id)
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        lowered = content.lower()
+
+        # 1. Check $tu snapshot for Main Account
+        if looks_like_tu_status_snapshot(content) and status_message_addresses_identity(content, main_identities, user_id=main_id):
+            if re.search(REGEX_PATTERNS["CLAIM_READY"], lowered):
+                _main_cooldown_tracker.update_status(
+                    main_id_str, claim_available=True, source="observed-main-$tu", observed_at_utc=now_utc
+                )
+                return True
+            mins = None
+            m_reset = re.search(REGEX_PATTERNS["CLAIM_RESET"], lowered)
+            if m_reset and not any(kw in m_reset.group(0) for kw in ("$daily", "$dk", "$rt")):
+                h_c, m_c = parse_hm(m_reset)
+                mins = h_c * 60 + m_c
+            if mins is None:
+                mins = parse_timer_minutes("CLAIM_COOLDOWN", lowered)
+            if mins is None:
+                mins = parse_timer_minutes("GENERIC_COOLDOWN", lowered.split("\n")[0])
+            if mins is not None:
+                _main_cooldown_tracker.update_status(
+                    main_id_str,
+                    claim_available=False,
+                    cooldown_until_utc=cooldown_deadline(now_utc, mins),
+                    source="observed-main-$tu",
+                    observed_at_utc=now_utc,
+                )
+                return True
+
+        # 2. Check Claim Cooldown rejection addressed to Main Account
+        if not getattr(message, "embeds", None) and status_message_addresses_identity(content, main_identities, user_id=main_id):
+            cd_mins = parse_claim_denied_cooldown(lowered)
+            if cd_mins is None:
+                m_cd = re.search(REGEX_PATTERNS["CLAIM_COOLDOWN"], lowered, re.IGNORECASE) or re.search(REGEX_PATTERNS["CLAIM_INTERVAL_COOLDOWN"], lowered, re.IGNORECASE)
+                if m_cd:
+                    h_c, m_c = parse_hm(m_cd)
+                    cd_mins = h_c * 60 + m_c
+            if cd_mins is not None:
+                _main_cooldown_tracker.mark_claimed(
+                    main_id_str,
+                    cooldown_until_utc=cooldown_deadline(now_utc, cd_mins),
+                    source="observed-main-cooldown",
+                    observed_at_utc=now_utc,
+                )
+                return True
+
+        # 3. Check marriage / claim confirmation on first line for Main Account
+        first_line = content.splitlines()[0] if content.splitlines() else ""
+        first_low = first_line.lower()
+        if "?" not in first_low and "divorc" not in first_low and not getattr(message, "embeds", None):
+            claim_phrases = (
+                "are now married", "is now married", "has claimed",
+                "se casou com", "se casó con", "a épousé",
+                "agora estão casados", "sont mariés", "ahora están casados",
+            )
+            if any(phrase in first_low for phrase in claim_phrases):
+                if status_message_addresses_identity(first_line, main_identities, user_id=main_id):
+                    # Prefer shared claim reset anchor if known
+                    deadline = None
+                    if getattr(client, "next_claim_reset_at_utc", None) and client.next_claim_reset_at_utc > now_utc:
+                        deadline = client.next_claim_reset_at_utc
+                    _main_cooldown_tracker.mark_claimed(
+                        main_id_str,
+                        claim_interval_minutes=getattr(client, "claim_interval", 180) or 180,
+                        cooldown_until_utc=deadline,
+                        source="observed-main-claim",
+                        observed_at_utc=now_utc,
+                    )
+                    BotLogger.log(
+                        f"Main Account Tracker: observed claim by main ({main_id_str}); alt claims unlocked for this cycle.",
+                        preset_name,
+                        "INFO",
+                    )
+                    return True
+        return False
+
+    def is_main_cooldown_allowing_claim(*, is_free_claim=False, is_rt_claim=False, is_wish=False, char_name=None, log_hold=False) -> bool:
+        if not getattr(client, "claim_only_if_main_cooldown", False):
+            return True
+        if getattr(client, "account_role", "main") == "main":
+            return True
+        main_id_str = get_effective_main_account_id()
+        own_uid = getattr(getattr(client, "user", None), "id", None)
+        if not main_id_str or (own_uid is not None and str(own_uid) == main_id_str):
+            return True
+        if is_free_claim and getattr(client, "main_cooldown_allow_free_claims", True):
+            return True
+        if is_rt_claim and getattr(client, "main_cooldown_allow_rt", False):
+            return True
+        if is_wish and getattr(client, "main_cooldown_exempt_wishes", False):
+            return True
+
+        # Refresh directly from any live running Main client in-process
+        with _active_clients_lock:
+            for c in _active_clients:
+                c_uid = getattr(getattr(c, "user", None), "id", None)
+                if c_uid is not None and str(c_uid) == main_id_str:
+                    _main_cooldown_tracker.update_status(
+                        main_id_str,
+                        claim_available=bool(getattr(c, "claim_right_available", False)),
+                        cooldown_until_utc=getattr(c, "next_claim_reset_at_utc", None),
+                        source="live-main-client",
+                    )
+                    break
+
+        allowed, reason = _main_cooldown_tracker.is_claim_allowed(
+            main_id_str,
+            unknown_policy=getattr(client, "main_cooldown_unknown_policy", "hold"),
+        )
+        if not allowed and log_hold:
+            last_hold_ts = getattr(client, "_last_main_guard_log_ts", 0.0)
+            now_mono = time.monotonic()
+            if now_mono - last_hold_ts >= 5.0:
+                client._last_main_guard_log_ts = now_mono
+                target_lbl = f" on {char_name}" if char_name else ""
+                BotLogger.log(
+                    f"Main Cooldown Guard: held claim{target_lbl} ({reason}).",
+                    preset_name,
+                    "INFO",
+                )
+        return allowed
 
     def claim_identities(guild=None):
         user = getattr(client, 'user', None)
@@ -2181,6 +2402,7 @@ def run_bot(preset_name, preset_data, log_function=print_log):
             client.claim_cooldown_until_utc = None
             client.last_successfully_claimed_character = None
             client._claim_reset_refresh_requested = True
+            publish_own_claim_state_if_main("predicted-claim-reset")
             BotLogger.log(
                 "Predicted claim reset reached. Claims are enabled from the local reset anchor.",
                 preset_name,
@@ -3109,6 +3331,7 @@ def run_bot(preset_name, preset_data, log_function=print_log):
         runtime_mode = "Android" if IS_TERMUX else ("EXE" if getattr(sys, "frozen", False) else "Python")
         BotLogger.log(f"MudaRemote v{CURRENT_VERSION} | {runtime_mode}", preset_name, "INFO")
         BotLogger.log(f"Ready: {client.user}", preset_name, "INFO")
+        publish_own_claim_state_if_main("on_ready")
         client.loop.create_task(health_monitor_task())
 
         target_ch_id = None
@@ -4482,9 +4705,11 @@ def run_bot(preset_name, preset_data, log_function=print_log):
                 await active_delay(2.0)
 
         # Surplus Kakera Gifting check
-        if getattr(client, "gifting_automation", None) and client.gifting_automation.give_kakera:
-            current_k = getattr(client, "last_known_kakera", None) or 0
-            await client.gifting_automation.transfer_kakera(_get_command_channel() or channel, current_k, client.mudae_prefix)
+        if getattr(client, "gifting_automation", None):
+            client.gifting_automation.sync_from_client(main_account_id=get_effective_main_account_id())
+            if client.gifting_automation.give_kakera:
+                current_k = getattr(client, "last_known_kakera", None) or 0
+                await client.gifting_automation.transfer_kakera(_get_command_channel() or channel, current_k, client.mudae_prefix)
 
         return True
 
@@ -5095,6 +5320,7 @@ def run_bot(preset_name, preset_data, log_function=print_log):
                 client.last_successfully_claimed_character = None
                 client.claim_cooldown_until_utc = None
                 client._claim_reset_refresh_requested = False
+                publish_own_claim_state_if_main("self-$tu-ready")
                 BotLogger.log("Claim: Ready", preset_name, "INFO")
                 client.current_min_kakera_for_roll_claim = client.min_kakera
                 if client.snipe_ignore_min_kakera_reset and claim_reset_minutes is not None and claim_reset_minutes <= 60:
@@ -6577,6 +6803,7 @@ def run_bot(preset_name, preset_data, log_function=print_log):
             )
             client._claim_reset_refresh_requested = False
             clear_status_dirty(client, {"claim"})
+            publish_own_claim_state_if_main("verified-claim")
 
         if client.is_paused:
             BotLogger.log("Post-claim actions skipped because the bot is paused.", preset_name, "INFO")
@@ -6632,12 +6859,10 @@ def run_bot(preset_name, preset_data, log_function=print_log):
         if getattr(client, "wishlist_sync", None) is not None:
             client.wishlist_sync.on_character_claimed(char_name)
 
-        if (
-            getattr(client, "gifting_automation", None) is not None
-            and client.gifting_automation.give_characters
-            and not farm_character_claimed
-        ):
-            await client.gifting_automation.transfer_character(channel, char_name, mudae_prefix=client.mudae_prefix)
+        if getattr(client, "gifting_automation", None) is not None and not farm_character_claimed:
+            client.gifting_automation.sync_from_client(main_account_id=get_effective_main_account_id())
+            if client.gifting_automation.give_characters:
+                await client.gifting_automation.transfer_character(channel, char_name, mudae_prefix=client.mudae_prefix)
 
         if (consumes_claim and client.auto_rt_after_claim and client.rt_available
                 and not client.is_paused and not farm_character_claimed):
@@ -7549,6 +7774,21 @@ def run_bot(preset_name, preset_data, log_function=print_log):
         if not is_kakera and not is_free_claim and char_name.lower() == getattr(client, 'last_successfully_claimed_character', ''):
             return False
 
+        if not is_kakera:
+            claim_is_wish = is_wish_or_starwish(msg, embed)
+            if not is_main_cooldown_allowing_claim(
+                is_free_claim=is_free_claim,
+                is_rt_claim=is_rt_claim,
+                is_wish=claim_is_wish,
+                char_name=char_name,
+                log_hold=True,
+            ):
+                return False
+            alt_extra = float(getattr(client, "multi_account_alt_snipe_extra_delay", 0.0) or 0.0)
+            if not is_free_claim and getattr(client, "account_role", "main") != "main" and alt_extra > 0:
+                if not await active_delay(alt_extra):
+                    return False
+
         kakera_str = ""
         if not is_kakera and not is_free_claim:
             val = kakera_value
@@ -8200,6 +8440,7 @@ def run_bot(preset_name, preset_data, log_function=print_log):
         observe_roll_command_message(message)
         observe_manual_rt_command(message)
         observe_shared_tu_resets(message)
+        observe_main_account_messages(message)
         capture_tu_response(message)
         client.sphere_runtime.capture_sphere_game_response(message)
         client.sphere_runtime.capture_sphere_game_bonus(message)
@@ -8617,7 +8858,7 @@ def run_bot(preset_name, preset_data, log_function=print_log):
                         "INFO",
                     )
                 elif is_high_value and not is_avoided and has_claim_option(message, embed, client.claim_emojis) and not already_in_progress:
-                    if is_key_mode_kakera_only():
+                    if is_key_mode_kakera_only() or not is_main_cooldown_allowing_claim(is_wish=is_wl, char_name=c_name, log_hold=True):
                         pass
                     else:
                         client.interrupt_rolling = True
@@ -8682,6 +8923,12 @@ def run_bot(preset_name, preset_data, log_function=print_log):
                         if (
                             is_key_mode_kakera_only()
                             or (not client.claim_right_available and not can_spend_rt)
+                            or not is_main_cooldown_allowing_claim(
+                                is_rt_claim=(not client.claim_right_available and can_spend_rt),
+                                is_wish=is_wl,
+                                char_name=c_name,
+                                log_hold=True,
+                            )
                         ):
                             pass
                         else:
@@ -9171,6 +9418,7 @@ def reset_mobile_runtime():
     _claim_coordinator = ClaimCoordinator()
     _server_reset_coordinator = ServerResetCoordinator()
     _tu_interval_coordinator = GlobalIntervalCoordinator()
+    _main_cooldown_tracker.clear()
 
 def parse_args(argv=None):
     import argparse

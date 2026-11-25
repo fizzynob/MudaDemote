@@ -3,13 +3,59 @@ import asyncio
 import datetime
 import json
 import os
+import re
 import time
 import weakref
 from aiohttp import web, WSMsgType
 
-from mudae_core.config import atomic_write_json, load_json, validate_preset
+from mudae_core.config import MAX_MULTI_ACCOUNTS, atomic_write_json, load_json, resolve_preset_accounts, validate_preset
 from mudae_core.auto_discovery import ServerDiscovery
 from mudae_core.bot_runtime import InstanceState
+
+
+def build_account_preset_snapshot(preset_name: str, preset_data: dict, account: dict, stagger_index: int = 0) -> tuple:
+    """Return (display_name, instance_id, snapshot_dict) for one configured account slot."""
+    import copy
+
+    slot = int(account.get("slot", stagger_index + 1) or (stagger_index + 1))
+    label = str(account.get("label") or ("Main" if slot == 1 else f"Alt #{slot}")).strip()
+    role = str(account.get("role") or ("main" if slot == 1 else "alt")).strip().lower()
+    if role not in ("main", "alt", "sniper", "farmer"):
+        role = "alt"
+
+    stagger_step = float(preset_data.get("multi_account_roll_stagger_seconds", 20) or 0)
+    snapshot = copy.deepcopy(preset_data)
+    snapshot.pop("accounts", None)
+    snapshot.pop("tokens", None)
+    snapshot["token"] = str(account.get("token") or "").strip().strip("\"'")
+    snapshot["_source_preset_name"] = preset_name
+    snapshot["_account_slot"] = slot
+    snapshot["_account_label"] = label
+    snapshot["_account_role"] = role
+    snapshot["persistent_stagger_seconds"] = max(0.0, stagger_step * stagger_index)
+
+    if account.get("channel_id"):
+        snapshot["channel_id"] = str(account["channel_id"]).strip()
+    if account.get("command_channel_id"):
+        snapshot["command_channel_id"] = str(account["command_channel_id"]).strip()
+    if account.get("rolling") is not None:
+        snapshot["rolling"] = bool(account["rolling"])
+    if account.get("snipe_mode") is not None:
+        snapshot["snipe_mode"] = bool(account["snipe_mode"])
+
+    if role == "main":
+        snapshot["auto_give_characters_enabled"] = False
+        snapshot["claim_only_if_main_cooldown"] = False
+    else:
+        if account.get("auto_give_characters") is not None:
+            snapshot["auto_give_characters_enabled"] = bool(account["auto_give_characters"])
+        if account.get("claim_only_if_main_cooldown") is not None:
+            snapshot["claim_only_if_main_cooldown"] = bool(account["claim_only_if_main_cooldown"])
+
+    safe_slug = re.sub(r"[^A-Za-z0-9_-]+", "-", preset_name).strip("-") or "preset"
+    instance_id = f"{safe_slug}-slot-{slot}"
+    display_name = preset_name if (slot == 1 and label.lower() == "main") else f"{preset_name} [{label}]"
+    return display_name, instance_id, snapshot
 
 
 class WebServerContext:
@@ -224,10 +270,117 @@ class WebServerContext:
         guild_obj = getattr(main_ch, "guild", None) if main_ch else None
         guild_name_val = getattr(guild_obj, "name", "") if guild_obj else ""
 
+        # Aggregate all running multi-account instances
+        accounts_status = []
+        running_count = 0
+        if self.runtime_manager:
+            for iid, inst in list(getattr(self.runtime_manager, "_instances", {}).items()):
+                if hasattr(inst, "get_client"):
+                    c, _ = inst.get_client()
+                else:
+                    c = getattr(inst, "_client", None)
+                c_ready = bool(c and getattr(c, "is_ready", lambda: False)())
+                c_paused = bool(c and getattr(c, "is_paused", False))
+                i_state = str(getattr(getattr(inst, "state", None), "value", getattr(inst, "state", "")) or "").lower()
+                if c_ready:
+                    i_running = True
+                    i_label = "paused" if c_paused else "running"
+                elif i_state in ("starting", "running"):
+                    i_running = True
+                    i_label = "starting"
+                elif i_state in ("stopping",):
+                    i_running = False
+                    i_label = "stopping"
+                else:
+                    i_running = False
+                    i_label = "offline"
+                if i_running:
+                    running_count += 1
+
+                c_roll_reset = getattr(c, "roll_reset_at_utc", None) if c_ready else None
+                c_claim_reset = getattr(c, "next_claim_reset_at_utc", None) if c_ready else None
+                c_roll_s = int((c_roll_reset - now_utc).total_seconds()) if c_roll_reset and c_roll_reset > now_utc else 0
+                c_claim_s = int((c_claim_reset - now_utc).total_seconds()) if c_claim_reset and c_claim_reset > now_utc else 0
+                accounts_status.append({
+                    "instance_id": iid,
+                    "slot": getattr(c, "account_slot", None) or getattr(inst, "preset_data", {}).get("_account_slot", len(accounts_status) + 1),
+                    "label": getattr(c, "account_label", None) or getattr(inst, "preset_name", iid),
+                    "role": getattr(c, "account_role", None) or getattr(inst, "preset_data", {}).get("_account_role", "main"),
+                    "running": i_running,
+                    "status_label": i_label,
+                    "paused": c_paused,
+                    "user": str(getattr(c, "user", i_label)) if c_ready else i_label,
+                    "user_id": str(getattr(getattr(c, "user", None), "id", "") or "") if c_ready else "",
+                    "rolls_left": getattr(c, "rolls_left", 0) if c_ready else 0,
+                    "roll_reset_seconds": c_roll_s,
+                    "claim_available": bool(getattr(c, "claim_right_available", False)) if c_ready else False,
+                    "claim_reset_seconds": c_claim_s,
+                    "rt_available": bool(getattr(c, "rt_available", False)) if c_ready else False,
+                    "kakera_power": getattr(c, "last_known_power", 100) if c_ready else 0,
+                    "channel_id": str(getattr(c, "target_channel_id", "") or ""),
+                    "claims_count": len(getattr(c, "recent_claims", []) or []) if c else 0,
+                    "auto_give_count": int(getattr(c, "auto_give_count", 0) or 0) if c else 0,
+                })
+
+        if running_count == 0 and running:
+            running_count = 1
+
+        # Aggregate recent claims across all connected accounts + server history
+        combined_claims = list(self.claims_history)
+        if self.runtime_manager:
+            seen_claim_keys = set()
+            merged_claims = []
+            for inst in list(getattr(self.runtime_manager, "_instances", {}).values()):
+                c = inst.get_client()[0] if hasattr(inst, "get_client") else getattr(inst, "_client", None)
+                for item in (getattr(c, "recent_claims", None) or []):
+                    key = (item.get("timestamp"), item.get("character"))
+                    if key not in seen_claim_keys:
+                        seen_claim_keys.add(key)
+                        merged_claims.append(item)
+            for item in combined_claims:
+                key = (item.get("timestamp"), item.get("character"))
+                if key not in seen_claim_keys:
+                    seen_claim_keys.add(key)
+                    merged_claims.append(item)
+            if merged_claims:
+                merged_claims.sort(key=lambda x: str(x.get("timestamp") or ""), reverse=True)
+                combined_claims = merged_claims
+        elif getattr(client, "recent_claims", None):
+            combined_claims = list(client.recent_claims)
+
+        # Live Main Account cooldown tracker status
+        main_account_status = {
+            "main_account_id": "",
+            "known": False,
+            "claim_available": None,
+            "on_cooldown": False,
+            "cooldown_reset_seconds": 0,
+            "source": "unknown",
+        }
+        try:
+            presets = load_json(self.presets_path, {})
+            active_cfg = presets.get(self.active_preset_name, {})
+            cfg_main_id = str(active_cfg.get("main_account_id") or "").strip()
+            from mudae_bot import get_main_cooldown_status
+            raw_main = get_main_cooldown_status(cfg_main_id)
+            main_account_status = {
+                "main_account_id": raw_main.get("main_account_id", ""),
+                "known": bool(raw_main.get("known", False)),
+                "claim_available": raw_main.get("claim_available"),
+                "on_cooldown": bool(raw_main.get("on_cooldown", False)),
+                "cooldown_reset_seconds": int(raw_main.get("cooldown_reset_seconds", 0) or 0),
+                "source": raw_main.get("source", "unknown"),
+            }
+        except Exception:
+            pass
+
         return {
             "running": running,
             "status_label": status_label,
             "paused": is_paused,
+            "running_count": running_count,
+            "accounts_status": accounts_status,
+            "main_account_status": main_account_status,
             "preset_name": self.active_preset_name,
             "user": user_display,
             "channel_id": channel_id_val,
@@ -246,7 +399,7 @@ class WebServerContext:
             "wishlist_count": len(getattr(client, "wishlist", [])) if is_connected else 0,
             "session_claims_count": self.session_claims_count,
             "session_kakera_total": self.session_kakera_total,
-            "recent_claims": list(getattr(client, "recent_claims", None) or self.claims_history)[:15],
+            "recent_claims": combined_claims[:15],
             "recent_kakera": list(self.kakera_history)[:15],
             "memory_mb": metrics["memory_mb"],
             "cpu_percent": metrics["cpu_percent"],
@@ -293,6 +446,23 @@ def create_app(context: WebServerContext) -> web.Application:
             merged = dict(presets.get(preset_name, {}))
             merged.update(preset_data)
 
+            # Synchronize accounts <-> tokens <-> primary token
+            if "accounts" in preset_data and isinstance(merged.get("accounts"), list):
+                resolved_accts = resolve_preset_accounts({"accounts": merged["accounts"]})
+                merged["accounts"] = resolved_accts
+                enabled_tokens = [a["token"] for a in resolved_accts if a.get("enabled", True) and a.get("token")]
+                merged["tokens"] = enabled_tokens[:MAX_MULTI_ACCOUNTS]
+                if enabled_tokens:
+                    merged["token"] = enabled_tokens[0]
+                elif resolved_accts and resolved_accts[0].get("token"):
+                    merged["token"] = resolved_accts[0]["token"]
+            elif "token" in preset_data and isinstance(merged.get("accounts"), list) and merged["accounts"]:
+                tok_val = str(merged.get("token") or "").strip().strip("\"'")
+                merged["accounts"][0]["token"] = tok_val
+                resolved_accts = resolve_preset_accounts({"accounts": merged["accounts"]})
+                merged["accounts"] = resolved_accts
+                merged["tokens"] = [a["token"] for a in resolved_accts if a.get("enabled", True) and a.get("token")][:MAX_MULTI_ACCOUNTS]
+
             # Apply defaults for core required keys if omitted
             merged.setdefault("prefix", "/////////////")
             merged.setdefault("mudae_prefix", "$")
@@ -310,20 +480,32 @@ def create_app(context: WebServerContext) -> web.Application:
             atomic_write_json(context.presets_path, presets)
             context.active_preset_name = preset_name
 
-            # Live apply to running instance if applicable
-            live_outcome = None
+            # Live apply to all running instances of this preset
             restart_required = []
             mgr = context.runtime_manager
             if mgr and getattr(mgr, "_instances", None):
-                instance_id = context.active_instance_id or next(iter(mgr._instances.keys()), None)
-                if instance_id and instance_id in mgr._instances:
-                    inst = mgr._instances[instance_id]
-                    if hasattr(inst, "apply_preset") and callable(inst.apply_preset):
-                        try:
-                            live_outcome = inst.apply_preset(merged)
-                            restart_required = live_outcome.get("restart_required", [])
-                        except Exception:
-                            pass
+                resolved_accts = resolve_preset_accounts(merged)
+                acct_by_slot = {a["slot"]: a for a in resolved_accts}
+                for iid, inst in list(mgr._instances.items()):
+                    if not hasattr(inst, "apply_preset") or not callable(inst.apply_preset):
+                        continue
+                    inst_src = getattr(inst, "preset_data", {}).get("_source_preset_name") or getattr(inst, "preset_name", "")
+                    if inst_src != preset_name and iid != context.active_instance_id:
+                        continue
+                    slot_num = int(getattr(inst, "preset_data", {}).get("_account_slot", 1) or 1)
+                    acct = acct_by_slot.get(slot_num)
+                    payload_for_inst = (
+                        build_account_preset_snapshot(preset_name, merged, acct, stagger_index=max(0, slot_num - 1))[2]
+                        if acct
+                        else merged
+                    )
+                    try:
+                        live_outcome = inst.apply_preset(payload_for_inst)
+                        for req in (live_outcome or {}).get("restart_required", []):
+                            if req not in restart_required:
+                                restart_required.append(req)
+                    except Exception:
+                        pass
 
             context.broadcast_event("preset_saved", {
                 "name": preset_name,
@@ -543,59 +725,111 @@ def create_app(context: WebServerContext) -> web.Application:
             else:
                 coro_or_fn()
 
+    def _resolve_target_clients(target_id=None):
+        """Return list of ready Discord clients matching target_id ('all', instance_id, or default primary)."""
+        mgr = context.runtime_manager
+        clients = []
+        if mgr and getattr(mgr, "_instances", None):
+            instances = getattr(mgr, "_instances", {})
+            if target_id == "all":
+                for inst in list(instances.values()):
+                    c = inst.get_client()[0] if hasattr(inst, "get_client") else getattr(inst, "_client", None)
+                    if c and getattr(c, "is_ready", lambda: False)():
+                        clients.append(c)
+                return clients
+            if target_id and target_id in instances:
+                inst = instances[target_id]
+                c = inst.get_client()[0] if hasattr(inst, "get_client") else getattr(inst, "_client", None)
+                if c and getattr(c, "is_ready", lambda: False)():
+                    return [c]
+                return []
+        primary = context.bot_client
+        if primary and getattr(primary, "is_ready", lambda: False)():
+            clients.append(primary)
+        return clients
+
     async def api_action_tu(request):
-        client = context.bot_client
-        if not client or not getattr(client, "is_ready", lambda: False)():
+        try:
+            body = await request.json() if request.can_read_body else {}
+        except Exception:
+            body = {}
+        targets = _resolve_target_clients(body.get("instance_id"))
+        if not targets:
             return web.json_response({"success": False, "error": "Bot is not connected."}, status=400)
-        channel = getattr(client, "command_channel", None) or getattr(client, "_main_channel", None)
-        if channel:
-            prefix = getattr(client, "mudae_prefix", "$")
-            _schedule_on_client_loop(client, channel.send(f"{prefix}tu"))
-            context.broadcast_event("action", {"action": "tu_queried"})
-            return web.json_response({"success": True, "message": f"{prefix}tu sent"})
+        sent_count = 0
+        last_prefix = "$"
+        for c in targets:
+            channel = getattr(c, "command_channel", None) or getattr(c, "_main_channel", None)
+            if channel:
+                prefix = getattr(c, "mudae_prefix", "$")
+                last_prefix = prefix
+                _schedule_on_client_loop(c, channel.send(f"{prefix}tu"))
+                sent_count += 1
+        if sent_count:
+            context.broadcast_event("action", {"action": "tu_queried", "count": sent_count})
+            return web.json_response({"success": True, "message": f"{last_prefix}tu sent ({sent_count} account{'s' if sent_count > 1 else ''})"})
         return web.json_response({"success": False, "error": "No active channel found."}, status=400)
 
     async def api_action_wishlist_sync(request):
-        client = context.bot_client
-        if not client or not getattr(client, "is_ready", lambda: False)():
+        try:
+            body = await request.json() if request.can_read_body else {}
+        except Exception:
+            body = {}
+        targets = _resolve_target_clients(body.get("instance_id"))
+        if not targets:
             return web.json_response({"success": False, "error": "Bot is not connected."}, status=400)
-        channel = getattr(client, "command_channel", None) or getattr(client, "_main_channel", None)
-        if channel:
-            prefix = getattr(client, "mudae_prefix", "$")
-            _schedule_on_client_loop(client, channel.send(f"{prefix}wll"))
-            context.broadcast_event("action", {"action": "wishlist_sync_requested"})
-            return web.json_response({"success": True, "message": f"{prefix}wll sent"})
+        sent_count = 0
+        last_prefix = "$"
+        for c in targets:
+            channel = getattr(c, "command_channel", None) or getattr(c, "_main_channel", None)
+            if channel:
+                prefix = getattr(c, "mudae_prefix", "$")
+                last_prefix = prefix
+                _schedule_on_client_loop(c, channel.send(f"{prefix}wll"))
+                sent_count += 1
+        if sent_count:
+            context.broadcast_event("action", {"action": "wishlist_sync_requested", "count": sent_count})
+            return web.json_response({"success": True, "message": f"{last_prefix}wll sent"})
         return web.json_response({"success": False, "error": "No active channel found."}, status=400)
 
     async def api_action_wake(request):
-        client = context.bot_client
-        if not client or not getattr(client, "is_ready", lambda: False)():
+        try:
+            body = await request.json() if request.can_read_body else {}
+        except Exception:
+            body = {}
+        targets = _resolve_target_clients(body.get("instance_id") or "all")
+        if not targets:
             return web.json_response({"success": False, "error": "Bot is not connected."}, status=400)
 
-        def _wake():
-            for ev_name in ("_immediate_check_event", "_runtime_state_event"):
-                ev = getattr(client, ev_name, None)
-                if ev is not None:
-                    ev.set()
+        for c in targets:
+            def _wake(target_c=c):
+                for ev_name in ("_immediate_check_event", "_runtime_state_event"):
+                    ev = getattr(target_c, ev_name, None)
+                    if ev is not None:
+                        ev.set()
 
-        _schedule_on_client_loop(client, _wake)
-        context.broadcast_event("system", {"message": "Status & roll loop wake signal dispatched."})
-        return web.json_response({"success": True, "message": "Loop wake triggered"})
+            _schedule_on_client_loop(c, _wake)
+        context.broadcast_event("system", {"message": f"Status & roll loop wake signal dispatched ({len(targets)} account{'s' if len(targets) > 1 else ''})."})
+        return web.json_response({"success": True, "message": "Loop wake triggered", "count": len(targets)})
 
     async def api_action_command(request):
-        client = context.bot_client
-        if not client or not getattr(client, "is_ready", lambda: False)():
-            return web.json_response({"success": False, "error": "Bot is not connected."}, status=400)
         try:
             body = await request.json()
             cmd = str(body.get("command", "") or "").strip()
             if not cmd:
                 return web.json_response({"success": False, "error": "Command string cannot be empty."}, status=400)
-            channel = getattr(client, "command_channel", None) or getattr(client, "_main_channel", None)
-            if channel:
-                _schedule_on_client_loop(client, channel.send(cmd))
-                context.broadcast_event("command", {"command": cmd, "status": "dispatched"})
-                return web.json_response({"success": True, "message": f"Command '{cmd}' sent"})
+            targets = _resolve_target_clients(body.get("instance_id"))
+            if not targets:
+                return web.json_response({"success": False, "error": "Bot is not connected."}, status=400)
+            sent_count = 0
+            for c in targets:
+                channel = getattr(c, "command_channel", None) or getattr(c, "_main_channel", None)
+                if channel:
+                    _schedule_on_client_loop(c, channel.send(cmd))
+                    sent_count += 1
+            if sent_count:
+                context.broadcast_event("command", {"command": cmd, "status": "dispatched", "count": sent_count})
+                return web.json_response({"success": True, "message": f"Command '{cmd}' sent ({sent_count} account{'s' if sent_count > 1 else ''})"})
             return web.json_response({"success": False, "error": "No active channel found."}, status=400)
         except Exception as exc:
             return web.json_response({"success": False, "error": str(exc)}, status=500)
@@ -613,25 +847,23 @@ def create_app(context: WebServerContext) -> web.Application:
         preset_data = presets.get(preset_name)
         if not preset_data:
             return web.json_response({"success": False, "error": f"Preset '{preset_name}' not found."}, status=400)
-        token = str(preset_data.get("token") or "").strip().strip("\"'")
-        if not token:
-            return web.json_response({"success": False, "error": "Discord token is required in Configs before starting."}, status=400)
 
-        # Clean up any stopped/failed instances, or return if already running this preset
+        target_slot = body.get("slot")
+        accounts = [a for a in resolve_preset_accounts(preset_data) if a.get("enabled", True) and a.get("token")]
+        if target_slot is not None:
+            accounts = [a for a in accounts if int(a.get("slot", 0)) == int(target_slot)]
+            if not accounts:
+                return web.json_response({"success": False, "error": f"Account slot #{target_slot} has no enabled token."}, status=400)
+        if not accounts:
+            return web.json_response({"success": False, "error": "Discord token is required in Configs or Multi-Account tab before starting."}, status=400)
+
+        # Clean up stopped instances or instances belonging to a different preset
         instances = getattr(mgr, "_instances", {})
         for iid, inst in list(instances.items()):
             st = getattr(inst, "state", None)
+            src_preset = getattr(inst, "preset_data", {}).get("_source_preset_name") or getattr(inst, "preset_name", None)
             if st in (InstanceState.STARTING, InstanceState.RUNNING):
-                if getattr(inst, "preset_name", None) == preset_name:
-                    # If paused, unpause it
-                    client = context.bot_client
-                    if client and getattr(client, "is_paused", False):
-                        client.is_paused = False
-                        _schedule_on_client_loop(client, lambda: getattr(client, "_runtime_state_event", None) and client._runtime_state_event.set())
-                        context.broadcast_status()
-                        return web.json_response({"success": True, "instance_id": iid, "message": "Bot resumed."})
-                    return web.json_response({"success": True, "instance_id": iid, "message": "Bot is already running."})
-                else:
+                if src_preset != preset_name and target_slot is None:
                     await asyncio.to_thread(mgr.stop_instance, iid)
                     if hasattr(mgr, "remove_instance"):
                         mgr.remove_instance(iid)
@@ -639,31 +871,72 @@ def create_app(context: WebServerContext) -> web.Application:
                 if hasattr(mgr, "remove_instance"):
                     mgr.remove_instance(iid)
 
+        started_ids = []
+        resumed_count = 0
         try:
-            instance_id = mgr.start_instance(preset_name, preset_data, {"token": token}, block=False)
-            context.active_instance_id = instance_id
+            for idx, acct in enumerate(accounts[:MAX_MULTI_ACCOUNTS]):
+                display_name, iid, snap = build_account_preset_snapshot(preset_name, preset_data, acct, stagger_index=idx)
+                existing_inst = getattr(mgr, "_instances", {}).get(iid)
+                if existing_inst and getattr(existing_inst, "state", None) in (InstanceState.STARTING, InstanceState.RUNNING):
+                    c = existing_inst.get_client()[0] if hasattr(existing_inst, "get_client") else getattr(existing_inst, "_client", None)
+                    if c and getattr(c, "is_paused", False):
+                        c.is_paused = False
+                        _schedule_on_client_loop(c, lambda target_c=c: getattr(target_c, "_runtime_state_event", None) and target_c._runtime_state_event.set())
+                        resumed_count += 1
+                    started_ids.append(iid)
+                    continue
+
+                created_id = mgr.start_instance(
+                    display_name, snap, {"token": acct["token"]}, instance_id=iid, block=False
+                )
+                started_ids.append(created_id)
+                if not context.active_instance_id or int(acct.get("slot", 1)) == 1:
+                    context.active_instance_id = created_id
+
             context.active_preset_name = preset_name
-            context.broadcast_event("system", {"message": f"Bot starting for preset '{preset_name}'..."})
+            msg = (
+                f"Resumed {resumed_count} account(s)."
+                if resumed_count and len(started_ids) == resumed_count
+                else f"Started {len(started_ids)} account(s) for preset '{preset_name}'."
+            )
+            context.broadcast_event("system", {"message": msg})
             context.broadcast_status()
-            return web.json_response({"success": True, "instance_id": instance_id})
+            return web.json_response({
+                "success": True,
+                "instance_id": started_ids[0] if started_ids else None,
+                "instance_ids": started_ids,
+                "count": len(started_ids),
+                "message": msg,
+            })
         except Exception as exc:
             return web.json_response({"success": False, "error": str(exc)}, status=500)
 
     async def api_bot_stop(request):
+        try:
+            body = await request.json() if request.can_read_body else {}
+        except Exception:
+            body = {}
+        target_iid = body.get("instance_id")
         mgr = context.runtime_manager
         if mgr and getattr(mgr, "_instances", None):
-            instance_id = context.active_instance_id or next(iter(mgr._instances.keys()), None)
-            if instance_id and instance_id in mgr._instances:
-                stopped = await asyncio.to_thread(mgr.stop_instance, instance_id)
-                if hasattr(mgr, "remove_instance") and callable(mgr.remove_instance):
+            instances = getattr(mgr, "_instances", {})
+            target_ids = [target_iid] if (target_iid and target_iid in instances) else list(instances.keys())
+            if target_ids:
+                stopped_any = False
+                for iid in target_ids:
                     try:
-                        mgr.remove_instance(instance_id)
+                        if await asyncio.to_thread(mgr.stop_instance, iid):
+                            stopped_any = True
+                        if hasattr(mgr, "remove_instance") and callable(mgr.remove_instance):
+                            mgr.remove_instance(iid)
                     except Exception:
                         pass
-                context.active_instance_id = None
-                context.broadcast_event("system", {"message": "Bot stopped."})
+                if context.active_instance_id not in getattr(mgr, "_instances", {}):
+                    context.active_instance_id = next(iter(getattr(mgr, "_instances", {}).keys()), None)
+                label = f"Account '{target_iid}' stopped." if target_iid else "All bot accounts stopped."
+                context.broadcast_event("system", {"message": label})
                 context.broadcast_status()
-                return web.json_response({"success": True, "stopped": stopped})
+                return web.json_response({"success": True, "stopped": stopped_any, "count": len(target_ids)})
 
         client = context.bot_client
         if client and hasattr(client, "close") and callable(client.close):
@@ -686,12 +959,21 @@ def create_app(context: WebServerContext) -> web.Application:
         preset_name = body.get("preset_name") or context.active_preset_name
         presets = load_json(context.presets_path, {})
         preset_data = presets.get(preset_name, {})
-        token = str(preset_data.get("token") or "").strip().strip("\"'")
-        if not token:
-            return web.json_response({"success": False, "error": "Discord token is required in Configs to restart."}, status=400)
+        target_slot = body.get("slot")
+        accounts = [a for a in resolve_preset_accounts(preset_data) if a.get("enabled", True) and a.get("token")]
+        if target_slot is not None:
+            accounts = [a for a in accounts if int(a.get("slot", 0)) == int(target_slot)]
+        if not accounts:
+            return web.json_response({"success": False, "error": "Discord token is required in Configs or Multi-Account tab to restart."}, status=400)
 
-        # Stop and remove all existing instances in a worker thread so we load fresh presets.json
-        for iid in list(getattr(mgr, "_instances", {}).keys()):
+        target_iids_to_stop = (
+            [build_account_preset_snapshot(preset_name, preset_data, accounts[0])[1]]
+            if target_slot is not None
+            else list(getattr(mgr, "_instances", {}).keys())
+        )
+        for iid in target_iids_to_stop:
+            if iid not in getattr(mgr, "_instances", {}):
+                continue
             try:
                 await asyncio.to_thread(mgr.stop_instance, iid)
                 if hasattr(mgr, "remove_instance") and callable(mgr.remove_instance):
@@ -700,31 +982,59 @@ def create_app(context: WebServerContext) -> web.Application:
                 pass
 
         try:
-            instance_id = mgr.start_instance(preset_name, preset_data, {"token": token}, block=False)
-            context.active_instance_id = instance_id
+            started_ids = []
+            for idx, acct in enumerate(accounts[:MAX_MULTI_ACCOUNTS]):
+                display_name, iid, snap = build_account_preset_snapshot(preset_name, preset_data, acct, stagger_index=idx)
+                created_id = mgr.start_instance(
+                    display_name, snap, {"token": acct["token"]}, instance_id=iid, block=False
+                )
+                started_ids.append(created_id)
+                if not context.active_instance_id or int(acct.get("slot", 1)) == 1:
+                    context.active_instance_id = created_id
             context.active_preset_name = preset_name
-            context.broadcast_event("system", {"message": f"Bot restarted with latest '{preset_name}' configuration."})
+            context.broadcast_event("system", {"message": f"Restarted {len(started_ids)} account(s) with latest '{preset_name}' configuration."})
             context.broadcast_status()
-            return web.json_response({"success": True, "restarted": True, "instance_id": instance_id})
+            return web.json_response({
+                "success": True,
+                "restarted": True,
+                "instance_id": started_ids[0] if started_ids else None,
+                "instance_ids": started_ids,
+                "count": len(started_ids),
+            })
         except Exception as exc:
             return web.json_response({"success": False, "error": str(exc)}, status=500)
 
     async def api_bot_pause(request):
-        client = context.bot_client
-        if not client or not getattr(client, "is_ready", lambda: False)():
+        try:
+            body = await request.json() if request.can_read_body else {}
+        except Exception:
+            body = {}
+        target_iid = body.get("instance_id")
+        targets = _resolve_target_clients(target_iid or "all")
+        if not targets:
             return web.json_response({"success": False, "error": "Bot is not connected."}, status=400)
-        new_paused = not bool(getattr(client, "is_paused", False))
-        client.is_paused = new_paused
 
-        def _notify_pause():
-            for ev_name in ("_runtime_state_event", "_immediate_check_event"):
-                ev = getattr(client, ev_name, None)
-                if ev is not None:
-                    ev.set()
+        if target_iid:
+            new_paused = not bool(getattr(targets[0], "is_paused", False))
+        else:
+            # If any account is unpaused, pause all; if all are paused, resume all
+            any_unpaused = any(not bool(getattr(c, "is_paused", False)) for c in targets)
+            new_paused = any_unpaused
 
-        _schedule_on_client_loop(client, _notify_pause)
+        for c in targets:
+            c.is_paused = new_paused
+
+            def _notify_pause(target_c=c):
+                for ev_name in ("_runtime_state_event", "_immediate_check_event"):
+                    ev = getattr(target_c, ev_name, None)
+                    if ev is not None:
+                        ev.set()
+
+            _schedule_on_client_loop(c, _notify_pause)
+
         state_word = "paused" if new_paused else "resumed"
-        context.broadcast_event("system", {"message": f"Bot {state_word} by user."})
+        scope_word = f"Account {target_iid}" if target_iid else f"Bot ({len(targets)} account{'s' if len(targets) > 1 else ''})"
+        context.broadcast_event("system", {"message": f"{scope_word} {state_word} by user."})
         context.broadcast_status()
         return web.json_response({"success": True, "paused": new_paused, "status_label": "paused" if new_paused else "running"})
 

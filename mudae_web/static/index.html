@@ -106,6 +106,16 @@
         <span>humanization</span>
       </button>
 
+      <button class="subnav-tab" data-tab="tab-accounts">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+          <circle cx="9" cy="7" r="4"></circle>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </svg>
+        <span>multi-account</span>
+      </button>
+
       <button class="subnav-tab" data-tab="tab-discovery">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="10"></circle>
@@ -218,6 +228,10 @@
 
         <!-- Terminal Command Input Bar -->
         <div class="terminal-input-bar">
+          <select id="terminalTargetSelect" class="terminal-target-select" title="choose which account executes commands">
+            <option value="">target: primary</option>
+            <option value="all">target: all accounts</option>
+          </select>
           <span class="prompt-arrow">&gt;</span>
           <input type="text" id="terminalCmdInput" class="terminal-input" placeholder="type any mudae command (e.g. $tu, $wll, $dk, $wa, $im rem) and press enter (up/down for history)...">
           <button id="btnTerminalSend" class="btn-terminal-send">send</button>
@@ -1314,6 +1328,175 @@
 
         <div class="card-footer-bar">
           <button id="btnSaveHumanization" class="btn-ptero-primary">save humanization settings</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- 6. MULTI-ACCOUNT FLEET TAB -->
+    <main id="tab-accounts" class="tab-pane">
+      <div class="ptero-card">
+        <div class="card-header-bar">
+          <div class="header-titles">
+            <h2>multi-account fleet &amp; main funneling (up to 5 tokens)</h2>
+            <p>run up to 5 discord tokens simultaneously, auto-$give claimed characters to your main account, and lock alt claims until your main is on cooldown.</p>
+          </div>
+          <div class="header-actions">
+            <button id="btnSaveMultiAccountTop" class="btn-ptero-primary">save multi-account settings</button>
+          </div>
+        </div>
+
+        <!-- Fleet Status & Bulk Action Strip -->
+        <div class="fleet-banner">
+          <div class="fleet-banner-left">
+            <span id="badgeFleetActiveCount" class="status-pill subtle">0 / 5 active</span>
+            <span id="badgeMainCooldownState" class="status-pill subtle">main claim: unknown</span>
+          </div>
+          <div class="fleet-banner-actions">
+            <button type="button" id="btnAddAccountSlot" class="btn-ptero-secondary btn-xs">+ add account slot (1/5)</button>
+            <button type="button" id="btnFleetStartAll" class="btn-power btn-start btn-xs">start all enabled</button>
+            <button type="button" id="btnFleetPauseAll" class="btn-power btn-pause btn-xs">pause/resume all</button>
+            <button type="button" id="btnFleetStopAll" class="btn-power btn-stop btn-xs">stop all</button>
+            <button type="button" id="btnFleetTuAll" class="btn-ptero-subtle btn-xs">query $tu all</button>
+          </div>
+        </div>
+
+        <div class="config-section-label mt-3">1. account token roster (max 5 accounts rolling &amp; claiming)</div>
+        <div id="multiAccountSlotsGrid" class="multi-account-grid"></div>
+
+        <div class="config-section-label mt-3">2. main account link &amp; auto-$give funneling</div>
+        <div class="automation-cards-grid">
+          <!-- Auto $give Characters -->
+          <div class="feature-box highlight-card">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>auto-$give claimed characters to main</h3>
+                <p>automatically executes <code>$give &lt;char&gt; @main</code> and confirms <code>y</code> right after any alt claims a character.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chkMaAutoGiveChars">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="feature-box-controls">
+              <div class="ctrl-group">
+                <label>main account discord user id (numeric)</label>
+                <div class="input-with-btn">
+                  <input type="text" id="txtMaMainAccountId" class="ptero-input-sm flex-1" placeholder="e.g. 123456789012345678">
+                  <button type="button" id="btnFillMainIdFromSlot1" class="btn-ptero-subtle btn-xs" title="copy discord user id from connected slot #1">use slot #1 id</button>
+                </div>
+              </div>
+              <div class="ptero-subgrid-2">
+                <div class="ctrl-group">
+                  <label>delay before $give (sec)</label>
+                  <input type="number" step="0.1" id="numMaAutoGiveDelay" class="ptero-input-sm" min="0" max="30" value="1.5">
+                </div>
+                <div class="ctrl-group">
+                  <label>alt syntax retry</label>
+                  <label class="ptero-checkbox mt-2">
+                    <input type="checkbox" id="chkMaAutoGiveRetryAlt" checked>
+                    <span>fallback to $give @main &lt;char&gt;</span>
+                  </label>
+                </div>
+              </div>
+              <span class="field-hint">note: if slot #1 is connected with role "main account", its discord id is automatically detected even if left blank.</span>
+            </div>
+          </div>
+
+          <!-- Auto $givek Surplus Kakera -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>auto-$givek surplus kakera to main</h3>
+                <p>transfers excess kakera from alt accounts to your main account above a set threshold.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chkMaAutoGiveKakera">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="feature-box-controls">
+              <div class="ptero-subgrid-2">
+                <div class="ctrl-group">
+                  <label>transfer when kakera &gt;=</label>
+                  <input type="number" id="numMaGiveKakeraThreshold" class="ptero-input-sm" min="0" value="5000">
+                </div>
+                <div class="ctrl-group">
+                  <label>keep reserve on alt</label>
+                  <input type="number" id="numMaGiveKakeraReserve" class="ptero-input-sm" min="0" value="1000">
+                </div>
+              </div>
+              <span class="field-hint">alt accounts keep the reserve amount for badges/kl and send everything else to your main user id.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="config-section-label mt-3">3. main account claim cooldown guard</div>
+        <div class="automation-cards-grid">
+          <!-- Main Cooldown Guard -->
+          <div class="feature-box highlight-card">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>claim only if main account is on cooldown</h3>
+                <p>holds alt character claims whenever your main account still has a claim ready (tracks live bot state &amp; channel mudae replies).</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chkMaClaimOnlyIfMainCooldown">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="feature-box-controls">
+              <div class="ctrl-group">
+                <label>when main claim status is unknown (on startup)</label>
+                <select id="selMaUnknownPolicy" class="ptero-select-sm">
+                  <option value="hold">hold alt claims until main cooldown is confirmed (safest)</option>
+                  <option value="allow">allow alt claims until main is observed ready</option>
+                </select>
+              </div>
+              <label class="ptero-checkbox mt-2">
+                <input type="checkbox" id="chkMaAltsCollectKakera" checked>
+                <span>alts still collect kakera buttons while character claiming is held</span>
+              </label>
+              <label class="ptero-checkbox">
+                <input type="checkbox" id="chkMaAllowFreeClaims" checked>
+                <span>allow free green event claims even when main claim is ready</span>
+              </label>
+              <label class="ptero-checkbox">
+                <input type="checkbox" id="chkMaAllowRt">
+                <span>allow $rt claims on alts while main claim is ready</span>
+              </label>
+              <label class="ptero-checkbox">
+                <input type="checkbox" id="chkMaExemptWishes">
+                <span>allow claiming configured wishlist characters even if main is ready</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Cross-Account Coordination & Priority -->
+          <div class="feature-box">
+            <div class="feature-box-top">
+              <div class="feature-box-info">
+                <h3>cross-account stagger &amp; claim priority</h3>
+                <p>controls rolling offsets, reaction priority for your main account, and global duplicate claim locking.</p>
+              </div>
+            </div>
+            <div class="feature-box-controls">
+              <div class="ptero-subgrid-2">
+                <div class="ctrl-group">
+                  <label>roll stagger between accounts (sec)</label>
+                  <input type="number" id="numMaRollStagger" class="ptero-input-sm" min="0" max="300" value="20">
+                </div>
+                <div class="ctrl-group">
+                  <label>extra alt reaction delay (sec)</label>
+                  <input type="number" step="0.1" id="numMaAltExtraDelay" class="ptero-input-sm" min="0" max="10" value="0.0">
+                </div>
+              </div>
+              <span class="field-hint">extra alt delay lets your main account reserve &amp; click rolls first before any alt reacts. global claim-lock &amp; shared reset boundaries are always active across all accounts.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-footer-bar">
+          <button id="btnSaveMultiAccount" class="btn-ptero-primary">save multi-account settings</button>
         </div>
       </div>
     </main>

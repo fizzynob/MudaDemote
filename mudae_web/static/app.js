@@ -26,6 +26,9 @@ let kakeraSnipeChatMessages = [];
 let claimEmojis = [...DEFAULT_CLAIM_EMOJIS];
 let sleepWindows = []; // stored as ["HH:MM", "HH:MM"] pairs
 
+const MAX_MULTI_ACCOUNTS = 5;
+let multiAccounts = []; // up to 5 account slot configs
+
 // Header & Navigation Elements
 const elServerBreadcrumb = document.getElementById("txtActivePreset");
 const elPresetSelect = document.getElementById("presetSelect");
@@ -55,6 +58,7 @@ const elMetricChannelName = document.getElementById("metricChannelName");
 
 // Terminal & Console Elements
 const elConsoleLogStream = document.getElementById("consoleLogStream");
+const elTerminalTargetSelect = document.getElementById("terminalTargetSelect");
 const elTerminalCmdInput = document.getElementById("terminalCmdInput");
 const elBtnTerminalSend = document.getElementById("btnTerminalSend");
 const elBtnClearConsole = document.getElementById("btnClearConsole");
@@ -270,6 +274,37 @@ const elInputAddSleepWindow = document.getElementById("inputAddSleepWindow");
 const elBtnAddSleepWindow = document.getElementById("btnAddSleepWindow");
 const elBtnClearSleepWindows = document.getElementById("btnClearSleepWindows");
 const elChipsSleepWindows = document.getElementById("chipsSleepWindows");
+
+// Multi-Account Fleet Tab Elements
+const elBadgeFleetActiveCount = document.getElementById("badgeFleetActiveCount");
+const elBadgeMainCooldownState = document.getElementById("badgeMainCooldownState");
+const elBtnAddAccountSlot = document.getElementById("btnAddAccountSlot");
+const elBtnFleetStartAll = document.getElementById("btnFleetStartAll");
+const elBtnFleetPauseAll = document.getElementById("btnFleetPauseAll");
+const elBtnFleetStopAll = document.getElementById("btnFleetStopAll");
+const elBtnFleetTuAll = document.getElementById("btnFleetTuAll");
+const elMultiAccountSlotsGrid = document.getElementById("multiAccountSlotsGrid");
+
+const elChkMaAutoGiveChars = document.getElementById("chkMaAutoGiveChars");
+const elTxtMaMainAccountId = document.getElementById("txtMaMainAccountId");
+const elBtnFillMainIdFromSlot1 = document.getElementById("btnFillMainIdFromSlot1");
+const elNumMaAutoGiveDelay = document.getElementById("numMaAutoGiveDelay");
+const elChkMaAutoGiveRetryAlt = document.getElementById("chkMaAutoGiveRetryAlt");
+const elChkMaAutoGiveKakera = document.getElementById("chkMaAutoGiveKakera");
+const elNumMaGiveKakeraThreshold = document.getElementById("numMaGiveKakeraThreshold");
+const elNumMaGiveKakeraReserve = document.getElementById("numMaGiveKakeraReserve");
+
+const elChkMaClaimOnlyIfMainCooldown = document.getElementById("chkMaClaimOnlyIfMainCooldown");
+const elSelMaUnknownPolicy = document.getElementById("selMaUnknownPolicy");
+const elChkMaAltsCollectKakera = document.getElementById("chkMaAltsCollectKakera");
+const elChkMaAllowFreeClaims = document.getElementById("chkMaAllowFreeClaims");
+const elChkMaAllowRt = document.getElementById("chkMaAllowRt");
+const elChkMaExemptWishes = document.getElementById("chkMaExemptWishes");
+
+const elNumMaRollStagger = document.getElementById("numMaRollStagger");
+const elNumMaAltExtraDelay = document.getElementById("numMaAltExtraDelay");
+const elBtnSaveMultiAccount = document.getElementById("btnSaveMultiAccount");
+const elBtnSaveMultiAccountTop = document.getElementById("btnSaveMultiAccountTop");
 
 // Server Access & Discovery Elements
 const elBtnDiscoverServers = document.getElementById("btnDiscoverServers");
@@ -564,7 +599,12 @@ function applyServerStatus(status) {
 
   // 4. Server Allocation Metric
   if (elMetricActivityBadge) {
-    elMetricActivityBadge.textContent = (status.activity || (status.running ? "online" : "offline")).toLowerCase();
+    const rCount = status.running_count || 0;
+    if (rCount > 1) {
+      elMetricActivityBadge.textContent = `${rCount} active`;
+    } else {
+      elMetricActivityBadge.textContent = (status.activity || (status.running ? "online" : "offline")).toLowerCase();
+    }
   }
   const userPart = status.user || "disconnected";
   const guildPart = status.guild_name ? ` (${status.guild_name})` : "";
@@ -577,6 +617,106 @@ function applyServerStatus(status) {
   elMetricChannelName.textContent = `channel: ${chDisplay}${memInfo}`.toLowerCase();
 
   renderActivityFeeds(status);
+  updateMultiAccountLiveTelemetry(status);
+}
+
+function updateMultiAccountLiveTelemetry(status) {
+  const accountsList = Array.isArray(status.accounts_status) ? status.accounts_status : [];
+  const activeCount = status.running_count != null
+    ? status.running_count
+    : accountsList.filter(a => a.running).length;
+
+  if (elBadgeFleetActiveCount) {
+    elBadgeFleetActiveCount.textContent = `${activeCount} / ${MAX_MULTI_ACCOUNTS} active`;
+    elBadgeFleetActiveCount.className = activeCount > 0 ? "status-pill pill-allowed" : "status-pill subtle";
+  }
+
+  if (elBadgeMainCooldownState) {
+    const ms = status.main_account_status || {};
+    if (!ms.main_account_id) {
+      elBadgeMainCooldownState.textContent = "main claim: unconfigured";
+      elBadgeMainCooldownState.className = "status-pill subtle";
+    } else if (!ms.known) {
+      elBadgeMainCooldownState.textContent = `main (${ms.main_account_id}): awaiting status`;
+      elBadgeMainCooldownState.className = "status-pill subtle";
+    } else if (ms.on_cooldown) {
+      const rem = ms.cooldown_reset_seconds > 0 ? ` (${formatSeconds(ms.cooldown_reset_seconds)})` : "";
+      elBadgeMainCooldownState.textContent = `main on cooldown${rem} — alts unlocked`;
+      elBadgeMainCooldownState.className = "status-pill pill-allowed";
+    } else {
+      elBadgeMainCooldownState.textContent = "main claim ready — alts holding";
+      elBadgeMainCooldownState.className = "status-pill pill-denied";
+    }
+  }
+
+  // Update terminal target dropdown options cleanly
+  if (elTerminalTargetSelect) {
+    const prevVal = elTerminalTargetSelect.value;
+    const baseOpts = [
+      { value: "", label: "target: primary" },
+      { value: "all", label: `target: all (${accountsList.length || activeCount})` },
+    ];
+    accountsList.forEach(acc => {
+      const u = acc.user ? ` (${acc.user})` : "";
+      baseOpts.push({
+        value: acc.instance_id,
+        label: `#${acc.slot} ${String(acc.label || "").toLowerCase()}${u}`,
+      });
+    });
+    const sig = baseOpts.map(o => `${o.value}:${o.label}`).join("|");
+    if (elTerminalTargetSelect.dataset.sig !== sig) {
+      elTerminalTargetSelect.dataset.sig = sig;
+      elTerminalTargetSelect.innerHTML = "";
+      baseOpts.forEach(o => {
+        const opt = document.createElement("option");
+        opt.value = o.value;
+        opt.textContent = o.label;
+        elTerminalTargetSelect.appendChild(opt);
+      });
+      if ([...elTerminalTargetSelect.options].some(o => o.value === prevVal)) {
+        elTerminalTargetSelect.value = prevVal;
+      }
+    }
+  }
+
+  // Update per-slot telemetry badges without replacing slot form inputs
+  const bySlot = new Map();
+  accountsList.forEach(a => bySlot.set(Number(a.slot), a));
+
+  multiAccounts.forEach(acct => {
+    const slotNum = Number(acct.slot);
+    const live = bySlot.get(slotNum);
+    const statusPill = document.getElementById(`slotStatusBadge-${slotNum}`);
+    const statsWrap = document.getElementById(`slotMiniStats-${slotNum}`);
+    if (statusPill) {
+      if (live && live.running) {
+        const lbl = (live.status_label || "running").toLowerCase();
+        statusPill.className = lbl === "paused"
+          ? "status-pill pill-target"
+          : (lbl === "starting" ? "status-pill subtle" : "status-pill pill-allowed");
+        const usr = live.user && live.user !== lbl ? ` • ${String(live.user).toLowerCase()}` : "";
+        statusPill.textContent = `${lbl}${usr}`;
+      } else {
+        statusPill.className = "status-pill subtle";
+        statusPill.textContent = "offline";
+      }
+    }
+    if (statsWrap) {
+      if (live && live.running) {
+        const claimStr = live.claim_available
+          ? "claim: ready"
+          : `claim: ${formatSeconds(live.claim_reset_seconds)}`;
+        statsWrap.innerHTML = `
+          <span class="mini-stat-pill">rolls: ${live.rolls_left ?? 0}</span>
+          <span class="mini-stat-pill">${claimStr}</span>
+          <span class="mini-stat-pill">pw: ${live.kakera_power ?? 0}%</span>
+          <span class="mini-stat-pill">claims: ${live.claims_count ?? 0} • gifts: ${live.auto_give_count ?? 0}</span>
+        `;
+      } else {
+        statsWrap.innerHTML = `<span class="mini-stat-pill">instance offline</span>`;
+      }
+    }
+  });
 }
 
 // Smooth 1-second local countdown tick between server polls
@@ -594,19 +734,25 @@ setInterval(() => {
 }, 1000);
 
 // Dispatch Mudae Command
-async function dispatchCommand(cmd) {
+async function dispatchCommand(cmd, overrideInstanceId = null) {
   const cleanCmd = cmd.trim();
   if (!cleanCmd) return;
   if (!cmdHistory.length || cmdHistory[cmdHistory.length - 1] !== cleanCmd) {
     cmdHistory.push(cleanCmd);
   }
   cmdHistoryIndex = cmdHistory.length;
-  appendConsoleLog("system", `> ${cleanCmd}`);
+  const targetInstanceId = overrideInstanceId !== null
+    ? overrideInstanceId
+    : (elTerminalTargetSelect ? elTerminalTargetSelect.value : "");
+  const targetPrefix = targetInstanceId ? `[${targetInstanceId}] ` : "";
+  appendConsoleLog("system", `${targetPrefix}> ${cleanCmd}`);
   try {
+    const payload = { command: cleanCmd };
+    if (targetInstanceId) payload.instance_id = targetInstanceId;
     const res = await fetch("/api/actions/command", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ command: cleanCmd }),
+      body: JSON.stringify(payload),
     });
     const json = await res.json();
     if (!json.success) {
@@ -1281,6 +1427,71 @@ function populatePresetData(data) {
   }
   renderAllHumanizationChips();
 
+  // Multi-Account Fleet & Coordination
+  if (Array.isArray(data.accounts) && data.accounts.length) {
+    multiAccounts = data.accounts.slice(0, MAX_MULTI_ACCOUNTS).map((a, idx) => ({
+      slot: idx + 1,
+      label: a.label || (idx === 0 ? "Main" : `Alt #${idx + 1}`),
+      token: a.token || "",
+      role: a.role || (idx === 0 ? "main" : "alt"),
+      enabled: a.enabled !== false,
+      channel_id: a.channel_id || "",
+      command_channel_id: a.command_channel_id || "",
+      rolling: a.rolling !== undefined && a.rolling !== null ? !!a.rolling : true,
+      snipe_mode: a.snipe_mode !== undefined && a.snipe_mode !== null ? !!a.snipe_mode : true,
+      auto_give_characters: a.auto_give_characters !== undefined && a.auto_give_characters !== null ? !!a.auto_give_characters : (idx > 0 && !!data.auto_give_characters_enabled),
+      claim_only_if_main_cooldown: a.claim_only_if_main_cooldown !== undefined && a.claim_only_if_main_cooldown !== null ? !!a.claim_only_if_main_cooldown : (idx > 0 && !!data.claim_only_if_main_cooldown),
+    }));
+  } else if (Array.isArray(data.tokens) && data.tokens.length) {
+    multiAccounts = data.tokens.slice(0, MAX_MULTI_ACCOUNTS).map((tok, idx) => ({
+      slot: idx + 1,
+      label: idx === 0 ? "Main" : `Alt #${idx + 1}`,
+      token: tok || "",
+      role: idx === 0 ? "main" : "alt",
+      enabled: true,
+      channel_id: "",
+      command_channel_id: "",
+      rolling: true,
+      snipe_mode: true,
+      auto_give_characters: idx > 0 && !!data.auto_give_characters_enabled,
+      claim_only_if_main_cooldown: idx > 0 && !!data.claim_only_if_main_cooldown,
+    }));
+  } else {
+    multiAccounts = [{
+      slot: 1,
+      label: "Main",
+      token: data.token || "",
+      role: "main",
+      enabled: true,
+      channel_id: "",
+      command_channel_id: "",
+      rolling: data.rolling !== false,
+      snipe_mode: !!data.snipe_mode,
+      auto_give_characters: false,
+      claim_only_if_main_cooldown: false,
+    }];
+  }
+  renderMultiAccountSlots();
+  if (lastStatusSnapshot) updateMultiAccountLiveTelemetry(lastStatusSnapshot);
+
+  if (elChkMaAutoGiveChars) elChkMaAutoGiveChars.checked = !!data.auto_give_characters_enabled;
+  if (elTxtMaMainAccountId) elTxtMaMainAccountId.value = data.main_account_id || "";
+  if (elNumMaAutoGiveDelay) elNumMaAutoGiveDelay.value = data.auto_give_delay_seconds != null ? data.auto_give_delay_seconds : 1.5;
+  if (elChkMaAutoGiveRetryAlt) elChkMaAutoGiveRetryAlt.checked = data.auto_give_retry_alt_syntax !== false;
+  if (elChkMaAutoGiveKakera) elChkMaAutoGiveKakera.checked = !!data.auto_give_kakera_enabled;
+  if (elNumMaGiveKakeraThreshold) elNumMaGiveKakeraThreshold.value = data.auto_give_kakera_threshold != null ? data.auto_give_kakera_threshold : 5000;
+  if (elNumMaGiveKakeraReserve) elNumMaGiveKakeraReserve.value = data.auto_give_kakera_reserve != null ? data.auto_give_kakera_reserve : 1000;
+
+  if (elChkMaClaimOnlyIfMainCooldown) elChkMaClaimOnlyIfMainCooldown.checked = !!data.claim_only_if_main_cooldown;
+  if (elSelMaUnknownPolicy) elSelMaUnknownPolicy.value = data.main_cooldown_unknown_policy || "hold";
+  if (elChkMaAltsCollectKakera) elChkMaAltsCollectKakera.checked = data.alts_still_collect_kakera !== false;
+  if (elChkMaAllowFreeClaims) elChkMaAllowFreeClaims.checked = data.main_cooldown_allow_free_claims !== false;
+  if (elChkMaAllowRt) elChkMaAllowRt.checked = !!data.main_cooldown_allow_rt;
+  if (elChkMaExemptWishes) elChkMaExemptWishes.checked = !!data.main_cooldown_exempt_wishes;
+
+  if (elNumMaRollStagger) elNumMaRollStagger.value = data.multi_account_roll_stagger_seconds != null ? data.multi_account_roll_stagger_seconds : 20;
+  if (elNumMaAltExtraDelay) elNumMaAltExtraDelay.value = data.multi_account_alt_snipe_extra_delay != null ? data.multi_account_alt_snipe_extra_delay : 0.0;
+
   // Settings
   elCfgWebhookUrl.value = data.webhook_url || "";
   if (elCfgSkipInitialCommands) elCfgSkipInitialCommands.checked = !!data.skip_initial_commands;
@@ -1330,6 +1541,9 @@ if (elBtnFormatJson) {
 function syncVisualToPresetObject(target) {
   if (elCfgToken.value.trim()) {
     target.token = elCfgToken.value.trim().replace(/^["']|["']$/g, "");
+    if (Array.isArray(target.accounts) && target.accounts.length) {
+      target.accounts[0].token = target.token;
+    }
   }
   target.channel_id = elCfgChannelId.value.trim();
   target.command_channel_id = elCfgCmdChannelId.value.trim();
@@ -1487,9 +1701,15 @@ function handleSaveAutomation() {
   if (elNumWishlistSyncHours) current.wishlist_sync_interval_hours = Math.max(1, parseInt(elNumWishlistSyncHours.value, 10) || 6);
   current.wishlist_remove_claimed = elChkWishlistRemoveClaimed.checked;
   current.auto_give_characters_enabled = elChkAutoGiveCharacters.checked;
+  if (elChkMaAutoGiveChars) elChkMaAutoGiveChars.checked = current.auto_give_characters_enabled;
   current.main_account_id = elTxtMainAccountId.value.trim();
-  if (elNumGiveKakeraThreshold) current.auto_give_kakera_threshold = Math.max(1000, parseInt(elNumGiveKakeraThreshold.value, 10) || 5000);
+  if (elTxtMaMainAccountId) elTxtMaMainAccountId.value = current.main_account_id;
+  if (elNumGiveKakeraThreshold) {
+    current.auto_give_kakera_threshold = Math.max(0, parseInt(elNumGiveKakeraThreshold.value, 10) || 5000);
+    if (elNumMaGiveKakeraThreshold) elNumMaGiveKakeraThreshold.value = current.auto_give_kakera_threshold;
+  }
   current.auto_give_kakera_enabled = elChkAutoGiveKakera.checked;
+  if (elChkMaAutoGiveKakera) elChkMaAutoGiveKakera.checked = current.auto_give_kakera_enabled;
   if (elChkAutoDivorce) current.auto_divorce_enabled = elChkAutoDivorce.checked;
   if (elNumDivorceMaxKakera) current.auto_divorce_max_kakera = parseInt(elNumDivorceMaxKakera.value, 10) || 80;
   if (elChkDivorceProtectWishes) current.auto_divorce_protect_wishes = elChkDivorceProtectWishes.checked;
@@ -1631,6 +1851,365 @@ if (elBtnSaveHumanization) {
 }
 if (elBtnSaveHumanizationTop) {
   elBtnSaveHumanizationTop.addEventListener("click", handleSaveHumanization);
+}
+
+// ============================================================================
+// Multi-Account Fleet Builder & Coordination Controller
+// ============================================================================
+
+function renderMultiAccountSlots() {
+  if (!elMultiAccountSlotsGrid) return;
+  if (elBtnAddAccountSlot) {
+    elBtnAddAccountSlot.textContent = `+ add account slot (${multiAccounts.length}/${MAX_MULTI_ACCOUNTS})`;
+    elBtnAddAccountSlot.disabled = multiAccounts.length >= MAX_MULTI_ACCOUNTS;
+  }
+
+  elMultiAccountSlotsGrid.innerHTML = "";
+  multiAccounts.forEach((acct, idx) => {
+    acct.slot = idx + 1;
+    const isMainRole = acct.role === "main";
+    const card = document.createElement("div");
+    card.className = `account-slot-card${isMainRole ? " role-main" : ""}${acct.enabled ? "" : " slot-disabled"}`;
+
+    card.innerHTML = `
+      <div class="account-slot-header">
+        <div class="account-slot-title-wrap">
+          <span class="account-slot-badge">#${acct.slot}</span>
+          <span id="slotStatusBadge-${acct.slot}" class="status-pill subtle">offline</span>
+        </div>
+        <div class="account-slot-controls-right">
+          <label class="switch" title="enable/disable this account slot">
+            <input type="checkbox" class="acct-enabled" ${acct.enabled ? "checked" : ""}>
+            <span class="slider"></span>
+          </label>
+          ${multiAccounts.length > 1 ? `<button type="button" class="btn-ptero-subtle btn-xs acct-remove" title="remove slot">&times;</button>` : ""}
+        </div>
+      </div>
+
+      <div id="slotMiniStats-${acct.slot}" class="account-mini-stats">
+        <span class="mini-stat-pill">instance offline</span>
+      </div>
+
+      <div class="ptero-subgrid-2">
+        <div class="ctrl-group">
+          <label>account label</label>
+          <input type="text" class="ptero-input-sm acct-label" value="${String(acct.label || "").replace(/"/g, "&quot;")}" placeholder="${isMainRole ? "main" : `alt #${acct.slot}`}">
+        </div>
+        <div class="ctrl-group">
+          <label>role</label>
+          <select class="ptero-select-sm acct-role">
+            <option value="main" ${acct.role === "main" ? "selected" : ""}>main account</option>
+            <option value="alt" ${acct.role === "alt" ? "selected" : ""}>alt (funnel to main)</option>
+            <option value="sniper" ${acct.role === "sniper" ? "selected" : ""}>sniper alt</option>
+            <option value="farmer" ${acct.role === "farmer" ? "selected" : ""}>kakera farmer</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="ctrl-group">
+        <label>discord token</label>
+        <div class="input-with-btn">
+          <input type="password" class="ptero-input-sm flex-1 acct-token" value="${String(acct.token || "").replace(/"/g, "&quot;")}" placeholder="paste discord user token...">
+          <button type="button" class="btn-ptero-subtle btn-xs acct-toggle-tok">show</button>
+        </div>
+      </div>
+
+      <div class="ptero-subgrid-2">
+        <div class="ctrl-group">
+          <label>override roll channel id (optional)</label>
+          <input type="text" class="ptero-input-sm acct-ch" value="${String(acct.channel_id || "").replace(/"/g, "&quot;")}" placeholder="use preset default">
+        </div>
+        <div class="ctrl-group">
+          <label>override cmd channel id (optional)</label>
+          <input type="text" class="ptero-input-sm acct-cmd-ch" value="${String(acct.command_channel_id || "").replace(/"/g, "&quot;")}" placeholder="use preset default">
+        </div>
+      </div>
+
+      <div class="account-slot-toggles">
+        <label class="ptero-checkbox">
+          <input type="checkbox" class="acct-rolling" ${acct.rolling ? "checked" : ""}>
+          <span>allow rolling</span>
+        </label>
+        <label class="ptero-checkbox">
+          <input type="checkbox" class="acct-snipe" ${acct.snipe_mode ? "checked" : ""}>
+          <span>allow sniping</span>
+        </label>
+        <label class="ptero-checkbox">
+          <input type="checkbox" class="acct-give" ${acct.auto_give_characters ? "checked" : ""} ${isMainRole ? "disabled" : ""}>
+          <span>auto $give to main</span>
+        </label>
+        <label class="ptero-checkbox">
+          <input type="checkbox" class="acct-main-cd" ${acct.claim_only_if_main_cooldown ? "checked" : ""} ${isMainRole ? "disabled" : ""}>
+          <span>only claim if main on cd</span>
+        </label>
+      </div>
+
+      <div class="account-slot-actions">
+        <span class="field-hint">${isMainRole ? "primary account" : "alt worker"}</span>
+        <div class="account-slot-pwr">
+          <button type="button" class="btn-power btn-start btn-xs acct-btn-start">start</button>
+          <button type="button" class="btn-power btn-pause btn-xs acct-btn-pause">pause</button>
+          <button type="button" class="btn-power btn-stop btn-xs acct-btn-stop">stop</button>
+        </div>
+      </div>
+    `;
+
+    card.querySelector(".acct-enabled").addEventListener("change", (e) => {
+      acct.enabled = e.target.checked;
+      card.classList.toggle("slot-disabled", !acct.enabled);
+    });
+    card.querySelector(".acct-label").addEventListener("input", (e) => { acct.label = e.target.value; });
+    card.querySelector(".acct-role").addEventListener("change", (e) => {
+      acct.role = e.target.value;
+      if (acct.role === "main") {
+        acct.auto_give_characters = false;
+        acct.claim_only_if_main_cooldown = false;
+      } else {
+        if (elChkMaAutoGiveChars && elChkMaAutoGiveChars.checked) acct.auto_give_characters = true;
+        if (elChkMaClaimOnlyIfMainCooldown && elChkMaClaimOnlyIfMainCooldown.checked) acct.claim_only_if_main_cooldown = true;
+      }
+      renderMultiAccountSlots();
+      if (lastStatusSnapshot) updateMultiAccountLiveTelemetry(lastStatusSnapshot);
+    });
+    const tokInput = card.querySelector(".acct-token");
+    tokInput.addEventListener("input", (e) => {
+      acct.token = e.target.value.trim().replace(/^["']|["']$/g, "");
+      if (idx === 0 && elCfgToken && acct.token) elCfgToken.value = acct.token;
+    });
+    const togBtn = card.querySelector(".acct-toggle-tok");
+    togBtn.addEventListener("click", () => {
+      if (tokInput.type === "password") {
+        tokInput.type = "text";
+        togBtn.textContent = "hide";
+      } else {
+        tokInput.type = "password";
+        togBtn.textContent = "show";
+      }
+    });
+    card.querySelector(".acct-ch").addEventListener("input", (e) => { acct.channel_id = e.target.value.trim(); });
+    card.querySelector(".acct-cmd-ch").addEventListener("input", (e) => { acct.command_channel_id = e.target.value.trim(); });
+    card.querySelector(".acct-rolling").addEventListener("change", (e) => { acct.rolling = e.target.checked; });
+    card.querySelector(".acct-snipe").addEventListener("change", (e) => { acct.snipe_mode = e.target.checked; });
+    card.querySelector(".acct-give").addEventListener("change", (e) => { acct.auto_give_characters = e.target.checked; });
+    card.querySelector(".acct-main-cd").addEventListener("change", (e) => { acct.claim_only_if_main_cooldown = e.target.checked; });
+
+    const btnRemove = card.querySelector(".acct-remove");
+    if (btnRemove) {
+      btnRemove.addEventListener("click", () => {
+        multiAccounts.splice(idx, 1);
+        renderMultiAccountSlots();
+        if (lastStatusSnapshot) updateMultiAccountLiveTelemetry(lastStatusSnapshot);
+      });
+    }
+
+    // Individual Account Power Controls
+    card.querySelector(".acct-btn-start").addEventListener("click", async () => {
+      await handleSaveMultiAccount(true);
+      try {
+        const res = await fetch("/api/bot/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ preset_name: activePresetName, slot: acct.slot }),
+        });
+        const json = await res.json();
+        showToast(json.message || (json.success ? `started slot #${acct.slot}` : json.error), json.success ? "success" : "error");
+      } catch (err) { showToast(err.message, "error"); }
+    });
+    card.querySelector(".acct-btn-pause").addEventListener("click", async () => {
+      const live = lastStatusSnapshot && Array.isArray(lastStatusSnapshot.accounts_status)
+        ? lastStatusSnapshot.accounts_status.find(a => Number(a.slot) === Number(acct.slot))
+        : null;
+      if (!live) { showToast(`slot #${acct.slot} is offline`, "error"); return; }
+      try {
+        const res = await fetch("/api/bot/pause", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ instance_id: live.instance_id }),
+        });
+        const json = await res.json();
+        showToast(json.success ? `slot #${acct.slot} ${json.paused ? "paused" : "resumed"}` : (json.error || "failed"), json.success ? "success" : "error");
+      } catch (err) { showToast(err.message, "error"); }
+    });
+    card.querySelector(".acct-btn-stop").addEventListener("click", async () => {
+      const live = lastStatusSnapshot && Array.isArray(lastStatusSnapshot.accounts_status)
+        ? lastStatusSnapshot.accounts_status.find(a => Number(a.slot) === Number(acct.slot))
+        : null;
+      if (!live) { showToast(`slot #${acct.slot} is already offline`, "info"); return; }
+      try {
+        const res = await fetch("/api/bot/stop", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ instance_id: live.instance_id }),
+        });
+        const json = await res.json();
+        showToast(json.success ? `stopped slot #${acct.slot}` : (json.error || "stop failed"), json.success ? "info" : "error");
+      } catch (err) { showToast(err.message, "error"); }
+    });
+
+    elMultiAccountSlotsGrid.appendChild(card);
+  });
+}
+
+if (elBtnAddAccountSlot) {
+  elBtnAddAccountSlot.addEventListener("click", () => {
+    if (multiAccounts.length >= MAX_MULTI_ACCOUNTS) {
+      showToast(`maximum ${MAX_MULTI_ACCOUNTS} accounts supported`, "error");
+      return;
+    }
+    const nextSlot = multiAccounts.length + 1;
+    multiAccounts.push({
+      slot: nextSlot,
+      label: `Alt #${nextSlot}`,
+      token: "",
+      role: "alt",
+      enabled: true,
+      channel_id: "",
+      command_channel_id: "",
+      rolling: true,
+      snipe_mode: true,
+      auto_give_characters: elChkMaAutoGiveChars ? elChkMaAutoGiveChars.checked : true,
+      claim_only_if_main_cooldown: elChkMaClaimOnlyIfMainCooldown ? elChkMaClaimOnlyIfMainCooldown.checked : true,
+    });
+    renderMultiAccountSlots();
+    if (lastStatusSnapshot) updateMultiAccountLiveTelemetry(lastStatusSnapshot);
+  });
+}
+
+if (elBtnFillMainIdFromSlot1) {
+  elBtnFillMainIdFromSlot1.addEventListener("click", () => {
+    const accountsList = (lastStatusSnapshot && Array.isArray(lastStatusSnapshot.accounts_status))
+      ? lastStatusSnapshot.accounts_status
+      : [];
+    const mainLive = accountsList.find(a => a.role === "main" && a.user_id) || accountsList.find(a => a.user_id);
+    if (mainLive && mainLive.user_id) {
+      elTxtMaMainAccountId.value = mainLive.user_id;
+      if (elTxtMainAccountId) elTxtMainAccountId.value = mainLive.user_id;
+      showToast(`copied id ${mainLive.user_id}`, "success");
+    } else {
+      showToast("connect slot #1 first to auto-detect its discord user id", "error");
+    }
+  });
+}
+
+// Keep master toggles propagated to newly created / non-main account slots cleanly when toggled
+if (elChkMaAutoGiveChars) {
+  elChkMaAutoGiveChars.addEventListener("change", () => {
+    if (elChkAutoGiveCharacters) elChkAutoGiveCharacters.checked = elChkMaAutoGiveChars.checked;
+    multiAccounts.forEach(a => {
+      if (a.role !== "main") a.auto_give_characters = elChkMaAutoGiveChars.checked;
+    });
+    renderMultiAccountSlots();
+    if (lastStatusSnapshot) updateMultiAccountLiveTelemetry(lastStatusSnapshot);
+  });
+}
+if (elChkMaClaimOnlyIfMainCooldown) {
+  elChkMaClaimOnlyIfMainCooldown.addEventListener("change", () => {
+    multiAccounts.forEach(a => {
+      if (a.role !== "main") a.claim_only_if_main_cooldown = elChkMaClaimOnlyIfMainCooldown.checked;
+    });
+    renderMultiAccountSlots();
+    if (lastStatusSnapshot) updateMultiAccountLiveTelemetry(lastStatusSnapshot);
+  });
+}
+
+async function handleSaveMultiAccount(silent = false) {
+  const current = allPresets[activePresetName] || {};
+  const cleanedAccounts = multiAccounts.slice(0, MAX_MULTI_ACCOUNTS).map((a, idx) => ({
+    slot: idx + 1,
+    label: String(a.label || (idx === 0 ? "Main" : `Alt #${idx + 1}`)).trim(),
+    token: String(a.token || "").trim().replace(/^["']|["']$/g, ""),
+    role: a.role || (idx === 0 ? "main" : "alt"),
+    enabled: a.enabled !== false,
+    channel_id: String(a.channel_id || "").trim(),
+    command_channel_id: String(a.command_channel_id || "").trim(),
+    rolling: !!a.rolling,
+    snipe_mode: !!a.snipe_mode,
+    auto_give_characters: a.role === "main" ? false : !!a.auto_give_characters,
+    claim_only_if_main_cooldown: a.role === "main" ? false : !!a.claim_only_if_main_cooldown,
+  }));
+
+  current.accounts = cleanedAccounts;
+  const enabledTokens = cleanedAccounts.filter(a => a.enabled && a.token).map(a => a.token);
+  current.tokens = enabledTokens;
+  if (enabledTokens.length) {
+    current.token = enabledTokens[0];
+    if (elCfgToken) elCfgToken.value = enabledTokens[0];
+  }
+
+  if (elChkMaAutoGiveChars) {
+    current.auto_give_characters_enabled = elChkMaAutoGiveChars.checked;
+    if (elChkAutoGiveCharacters) elChkAutoGiveCharacters.checked = elChkMaAutoGiveChars.checked;
+  }
+  if (elTxtMaMainAccountId) {
+    current.main_account_id = elTxtMaMainAccountId.value.trim();
+    if (elTxtMainAccountId) elTxtMainAccountId.value = current.main_account_id;
+  }
+  if (elNumMaAutoGiveDelay) current.auto_give_delay_seconds = Math.max(0, parseFloat(elNumMaAutoGiveDelay.value) || 0);
+  if (elChkMaAutoGiveRetryAlt) current.auto_give_retry_alt_syntax = elChkMaAutoGiveRetryAlt.checked;
+
+  if (elChkMaAutoGiveKakera) {
+    current.auto_give_kakera_enabled = elChkMaAutoGiveKakera.checked;
+    if (elChkAutoGiveKakera) elChkAutoGiveKakera.checked = elChkMaAutoGiveKakera.checked;
+  }
+  if (elNumMaGiveKakeraThreshold) {
+    current.auto_give_kakera_threshold = Math.max(0, parseInt(elNumMaGiveKakeraThreshold.value, 10) || 5000);
+    if (elNumGiveKakeraThreshold) elNumGiveKakeraThreshold.value = current.auto_give_kakera_threshold;
+  }
+  if (elNumMaGiveKakeraReserve) current.auto_give_kakera_reserve = Math.max(0, parseInt(elNumMaGiveKakeraReserve.value, 10) || 0);
+
+  if (elChkMaClaimOnlyIfMainCooldown) current.claim_only_if_main_cooldown = elChkMaClaimOnlyIfMainCooldown.checked;
+  if (elSelMaUnknownPolicy) current.main_cooldown_unknown_policy = elSelMaUnknownPolicy.value;
+  if (elChkMaAltsCollectKakera) current.alts_still_collect_kakera = elChkMaAltsCollectKakera.checked;
+  if (elChkMaAllowFreeClaims) current.main_cooldown_allow_free_claims = elChkMaAllowFreeClaims.checked;
+  if (elChkMaAllowRt) current.main_cooldown_allow_rt = elChkMaAllowRt.checked;
+  if (elChkMaExemptWishes) current.main_cooldown_exempt_wishes = elChkMaExemptWishes.checked;
+
+  if (elNumMaRollStagger) current.multi_account_roll_stagger_seconds = Math.max(0, parseFloat(elNumMaRollStagger.value) || 0);
+  if (elNumMaAltExtraDelay) current.multi_account_alt_snipe_extra_delay = Math.max(0, parseFloat(elNumMaAltExtraDelay.value) || 0);
+
+  if (!silent) {
+    await saveActivePreset(current);
+  } else {
+    try {
+      const res = await fetch("/api/presets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: activePresetName, data: current }),
+      });
+      const json = await res.json();
+      if (json.success) allPresets[activePresetName] = current;
+    } catch (e) {}
+  }
+}
+
+if (elBtnSaveMultiAccount) elBtnSaveMultiAccount.addEventListener("click", () => handleSaveMultiAccount(false));
+if (elBtnSaveMultiAccountTop) elBtnSaveMultiAccountTop.addEventListener("click", () => handleSaveMultiAccount(false));
+
+// Fleet Bulk Action Controls
+if (elBtnFleetStartAll) {
+  elBtnFleetStartAll.addEventListener("click", async () => {
+    await handleSaveMultiAccount(true);
+    elBtnPowerStart.click();
+  });
+}
+if (elBtnFleetPauseAll) {
+  elBtnFleetPauseAll.addEventListener("click", () => elBtnPowerPause && elBtnPowerPause.click());
+}
+if (elBtnFleetStopAll) {
+  elBtnFleetStopAll.addEventListener("click", () => elBtnPowerStop && elBtnPowerStop.click());
+}
+if (elBtnFleetTuAll) {
+  elBtnFleetTuAll.addEventListener("click", async () => {
+    try {
+      const res = await fetch("/api/actions/tu", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instance_id: "all" }),
+      });
+      const json = await res.json();
+      showToast(json.message || (json.success ? "queried $tu on all accounts" : json.error), json.success ? "info" : "error");
+    } catch (err) { showToast(err.message, "error"); }
+  });
 }
 
 // Save General Settings
@@ -2121,8 +2700,10 @@ function formatConsoleEvent(type, data) {
   }
   if (data.message) {
     const lvl = (data.level || type || "info").toLowerCase();
-    const text = typeof data.message === "string" ? data.message : JSON.stringify(data.message);
-    return { text: text, level: lvl };
+    const rawMsg = typeof data.message === "string" ? data.message : JSON.stringify(data.message);
+    const pName = data.preset_name ? String(data.preset_name) : "";
+    const tagPrefix = pName.includes("[") ? `[${pName.toLowerCase()}] ` : "";
+    return { text: `${tagPrefix}${rawMsg}`, level: lvl };
   }
   return { text: JSON.stringify(data), level: (type || "info").toLowerCase() };
 }

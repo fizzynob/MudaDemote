@@ -1,6 +1,6 @@
 """Shared, testable infrastructure for MudaRemote."""
 
-from .config import atomic_write_json, load_json, validate_preset
+from .config import MAX_MULTI_ACCOUNTS, atomic_write_json, load_json, resolve_preset_accounts, validate_preset
 from .claiming import (
     ClaimEvidence,
     ClaimOutcome,
@@ -12,7 +12,7 @@ from .claiming import (
     has_free_claim_button,
     is_claim_announcement_for_character,
 )
-from .coordinator import ClaimCoordinator, GlobalIntervalCoordinator
+from .coordinator import ClaimCoordinator, GlobalIntervalCoordinator, MainAccountCooldownTracker
 from .kakera import (
     KakeraInteractionKey,
     KakeraInteractionLedger,
@@ -357,6 +357,9 @@ __all__ = [
     "tu_cache_seconds_remaining",
     "tu_retry_wait",
     "validate_preset",
+    "resolve_preset_accounts",
+    "MAX_MULTI_ACCOUNTS",
+    "MainAccountCooldownTracker",
     "load_update_channel_setting",
     "save_update_channel_setting",
     "fetch_available_releases",

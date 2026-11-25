@@ -30,9 +30,9 @@ if sys.platform != "win32":
     except ImportError:
         pass
 
-from mudae_core.config import load_json, atomic_write_json
+from mudae_core.config import MAX_MULTI_ACCOUNTS, load_json, atomic_write_json, resolve_preset_accounts
 from mudae_core.bot_runtime import RuntimeManager, InstanceEvent
-from mudae_web.app import WebServerContext, create_app
+from mudae_web.app import WebServerContext, build_account_preset_snapshot, create_app
 
 
 async def periodic_memory_optimization():
@@ -108,16 +108,21 @@ async def main():
     if args.autostart:
         presets = load_json(presets_path, {})
         target_preset = presets.get(args.preset)
-        if target_preset and target_preset.get("token"):
-            print(f"Autostarting bot instance for preset '{args.preset}'...")
-            try:
-                instance_id = runtime_mgr.start_instance(
-                    args.preset, target_preset, {"token": target_preset["token"]}, block=False
-                )
-                context.active_instance_id = instance_id
-                print(f"Instance started with ID: {instance_id}")
-            except Exception as e:
-                print(f"Failed to autostart instance: {e}")
+        if target_preset:
+            accounts = [a for a in resolve_preset_accounts(target_preset) if a.get("enabled", True) and a.get("token")]
+            if accounts:
+                print(f"Autostarting {len(accounts[:MAX_MULTI_ACCOUNTS])} account(s) for preset '{args.preset}'...")
+                try:
+                    for idx, acct in enumerate(accounts[:MAX_MULTI_ACCOUNTS]):
+                        display_name, iid, snap = build_account_preset_snapshot(args.preset, target_preset, acct, stagger_index=idx)
+                        instance_id = runtime_mgr.start_instance(
+                            display_name, snap, {"token": acct["token"]}, instance_id=iid, block=False
+                        )
+                        if not context.active_instance_id or int(acct.get("slot", 1)) == 1:
+                            context.active_instance_id = instance_id
+                        print(f"Account #{acct.get('slot', idx+1)} ({display_name}) started with ID: {instance_id}")
+                except Exception as e:
+                    print(f"Failed to autostart instance(s): {e}")
 
     # Graceful stop handler
     stop_event = asyncio.Event()

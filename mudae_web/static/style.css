@@ -959,6 +959,147 @@ body.theme-offwhite {
   border-color: #b6e3ff;
 }
 
+/* ==========================================================================
+   Multi-Account Fleet Tab & Terminal Target Selector
+   ========================================================================== */
+
+.terminal-target-select {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+  color: #e4e4e7;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 6px;
+  margin-right: 8px;
+  outline: none;
+  text-transform: lowercase;
+}
+.terminal-target-select option {
+  background: #18181b;
+  color: #e4e4e7;
+}
+
+.fleet-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  background-color: #fafbfc;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.fleet-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fleet-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.multi-account-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 14px;
+}
+
+.account-slot-card {
+  background-color: #fafbfc;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.account-slot-card.role-main {
+  border-left: 3px solid var(--ptero-blue);
+}
+.account-slot-card.slot-disabled {
+  opacity: 0.72;
+}
+
+.account-slot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.account-slot-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.account-slot-badge {
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-dark);
+  color: var(--text-main);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 5px;
+}
+
+.account-slot-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.account-mini-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.mini-stat-pill {
+  background-color: #ffffff;
+  border: 1px solid var(--border-light);
+  border-radius: 5px;
+  padding: 2px 7px;
+  color: var(--text-muted);
+}
+
+.account-slot-toggles {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px 10px;
+  padding-top: 4px;
+}
+
+.account-slot-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-light);
+}
+
+.account-slot-pwr {
+  display: flex;
+  gap: 5px;
+}
+
 .feature-box {
   background-color: #fafbfc;
   border: 1px solid var(--border-light);
@@ -1519,8 +1660,35 @@ input:checked + .slider:before {
   .ptero-toggles-grid,
   .automation-cards-grid,
   .humanization-hero-grid,
+  .multi-account-grid,
   .server-config-grid {
     grid-template-columns: 1fr;
+  }
+
+  .fleet-banner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .fleet-banner-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .fleet-banner-actions button {
+    width: 100%;
+  }
+
+  .terminal-input-bar {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .terminal-target-select {
+    width: 100%;
+    margin-right: 0;
   }
 
   .toast-container {
@@ -1545,7 +1713,12 @@ input:checked + .slider:before {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .ptero-subgrid-2 {
+  .ptero-subgrid-2,
+  .account-slot-toggles {
+    grid-template-columns: 1fr;
+  }
+
+  .fleet-banner-actions {
     grid-template-columns: 1fr;
   }
 

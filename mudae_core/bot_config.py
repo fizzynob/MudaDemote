@@ -560,7 +560,36 @@ def configure_client(
     client.auto_give_characters_enabled = bool(preset_data.get("auto_give_characters_enabled", False))
     client.auto_give_kakera_enabled = bool(preset_data.get("auto_give_kakera_enabled", False))
     client.auto_give_kakera_threshold = int(preset_data.get("auto_give_kakera_threshold", 5000) or 5000)
+    client.auto_give_kakera_reserve = max(0, int(preset_data.get("auto_give_kakera_reserve", 1000) or 0))
+    client.auto_give_delay_seconds = max(
+        0.0,
+        float(
+            preset_data.get("auto_give_delay_seconds", 1.5)
+            if preset_data.get("auto_give_delay_seconds") is not None
+            else 1.5
+        ),
+    )
+    client.auto_give_retry_alt_syntax = bool(preset_data.get("auto_give_retry_alt_syntax", True))
     client.auto_limroul_enabled = bool(preset_data.get("auto_limroul_enabled", False))
+
+    # Multi-account coordination & Main Account Cooldown Guard
+    client.account_slot = int(preset_data.get("_account_slot", 1) or 1)
+    client.account_label = str(preset_data.get("_account_label") or preset_name).strip()
+    client.account_role = str(preset_data.get("_account_role") or "main").strip().lower()
+    if client.account_role not in ("main", "alt", "sniper", "farmer"):
+        client.account_role = "alt"
+    client.claim_only_if_main_cooldown = bool(preset_data.get("claim_only_if_main_cooldown", False))
+    policy_raw = str(preset_data.get("main_cooldown_unknown_policy", "hold") or "hold").strip().lower()
+    client.main_cooldown_unknown_policy = policy_raw if policy_raw in ("hold", "allow") else "hold"
+    client.main_cooldown_allow_free_claims = bool(preset_data.get("main_cooldown_allow_free_claims", True))
+    client.main_cooldown_allow_rt = bool(preset_data.get("main_cooldown_allow_rt", False))
+    client.main_cooldown_exempt_wishes = bool(preset_data.get("main_cooldown_exempt_wishes", False))
+    client.alts_still_collect_kakera = bool(preset_data.get("alts_still_collect_kakera", True))
+    client.multi_account_alt_snipe_extra_delay = max(
+        0.0, float(preset_data.get("multi_account_alt_snipe_extra_delay", 0.0) or 0.0)
+    )
+    client.auto_give_count = 0
+    client.recent_gifts = []
 
     # Reset / status anchors and intervals
     client.next_claim_reset_at_utc = None
@@ -825,6 +854,13 @@ LIVE_CONFIG_ATTRIBUTES = frozenset({
     "auto_wishlist_sync_enabled", "wishlist_sync_interval_hours",
     "wishlist_remove_claimed", "auto_give_characters_enabled",
     "auto_give_kakera_enabled", "auto_give_kakera_threshold",
+    "auto_give_kakera_reserve", "auto_give_delay_seconds",
+    "auto_give_retry_alt_syntax",
+    "account_slot", "account_label", "account_role",
+    "claim_only_if_main_cooldown", "main_cooldown_unknown_policy",
+    "main_cooldown_allow_free_claims", "main_cooldown_allow_rt",
+    "main_cooldown_exempt_wishes", "alts_still_collect_kakera",
+    "multi_account_alt_snipe_extra_delay",
     "auto_limroul_enabled", "allowed_guild_ids", "target_guild_id",
     "server_configs",
 })

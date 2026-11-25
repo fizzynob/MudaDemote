@@ -8,6 +8,75 @@ import uuid
 
 
 _TIME_RE = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+MAX_MULTI_ACCOUNTS = 5
+
+
+def resolve_preset_accounts(data):
+    """Normalize up to 5 configured account entries from a preset dict."""
+    if not isinstance(data, dict):
+        return []
+    raw_accounts = data.get("accounts")
+    if isinstance(raw_accounts, list) and raw_accounts:
+        normalized = []
+        for idx, entry in enumerate(raw_accounts[:MAX_MULTI_ACCOUNTS], 1):
+            if not isinstance(entry, dict):
+                continue
+            token = str(entry.get("token") or "").strip().strip("\"'")
+            role = str(entry.get("role") or ("main" if idx == 1 else "alt")).strip().lower()
+            if role not in ("main", "alt", "sniper", "farmer"):
+                role = "alt"
+            normalized.append({
+                "slot": idx,
+                "label": str(entry.get("label") or (f"Account #{idx}" if idx > 1 else "Main")).strip(),
+                "token": token,
+                "role": role,
+                "enabled": bool(entry.get("enabled", True)),
+                "channel_id": str(entry.get("channel_id") or "").strip(),
+                "command_channel_id": str(entry.get("command_channel_id") or "").strip(),
+                "rolling": entry.get("rolling") if "rolling" in entry else None,
+                "snipe_mode": entry.get("snipe_mode") if "snipe_mode" in entry else None,
+                "auto_give_characters": entry.get("auto_give_characters") if "auto_give_characters" in entry else None,
+                "claim_only_if_main_cooldown": entry.get("claim_only_if_main_cooldown") if "claim_only_if_main_cooldown" in entry else None,
+            })
+        return normalized
+
+    raw_tokens = data.get("tokens")
+    if isinstance(raw_tokens, (list, tuple)) and raw_tokens:
+        normalized = []
+        for idx, tok in enumerate(list(raw_tokens)[:MAX_MULTI_ACCOUNTS], 1):
+            cleaned = str(tok or "").strip().strip("\"'")
+            if cleaned:
+                normalized.append({
+                    "slot": idx,
+                    "label": "Main" if idx == 1 else f"Alt #{idx}",
+                    "token": cleaned,
+                    "role": "main" if idx == 1 else "alt",
+                    "enabled": True,
+                    "channel_id": "",
+                    "command_channel_id": "",
+                    "rolling": None,
+                    "snipe_mode": None,
+                    "auto_give_characters": None,
+                    "claim_only_if_main_cooldown": None,
+                })
+        return normalized
+
+    primary_tok = str(data.get("token") or "").strip().strip("\"'")
+    if primary_tok:
+        return [{
+            "slot": 1,
+            "label": "Main",
+            "token": primary_tok,
+            "role": "main",
+            "enabled": True,
+            "channel_id": "",
+            "command_channel_id": "",
+            "rolling": None,
+            "snipe_mode": None,
+            "auto_give_characters": None,
+            "claim_only_if_main_cooldown": None,
+        }]
+    return []
 
 
 def _normalize_clock(value):
@@ -188,7 +257,49 @@ def validate_preset(data, resolved_token=None, require_runtime=True):
         if len(cooldowns) == 2 and cooldowns["loot_max_cooldown"] < cooldowns["loot_min_cooldown"]:
             errors.append("Maximum loot cooldown must be >= minimum loot cooldown.")
     token = resolved_token if resolved_token is not None else data.get("token")
-    token_values = token if isinstance(token, (list, tuple)) else [token]
+    token_values = list(token) if isinstance(token, (list, tuple)) else [token]
+    raw_accounts = data.get("accounts")
+    if raw_accounts is not None:
+        if not isinstance(raw_accounts, list):
+            errors.append("accounts must be a list of account configurations.")
+        else:
+            if len(raw_accounts) > MAX_MULTI_ACCOUNTS:
+                errors.append("Maximum {} accounts are supported per preset.".format(MAX_MULTI_ACCOUNTS))
+            seen_acct_tokens = set()
+            for idx, entry in enumerate(raw_accounts, 1):
+                if not isinstance(entry, dict):
+                    errors.append("Account slot #{} must be an object.".format(idx))
+                    continue
+                acct_tok = str(entry.get("token") or "").strip().strip("\"'")
+                if acct_tok and entry.get("enabled", True):
+                    if acct_tok in seen_acct_tokens:
+                        errors.append("Duplicate Discord token found across multi-account slots.")
+                    seen_acct_tokens.add(acct_tok)
+                    token_values.append(acct_tok)
+                for ch_key, ch_lbl in (("channel_id", "Channel ID"), ("command_channel_id", "Command Channel ID")):
+                    ch_val = entry.get(ch_key)
+                    if ch_val not in (None, ""):
+                        try:
+                            if int(ch_val) <= 0:
+                                raise ValueError
+                        except (TypeError, ValueError):
+                            errors.append("Account #{} {} must be empty or a positive number.".format(idx, ch_lbl))
+                role = entry.get("role")
+                if role is not None and str(role).strip().lower() not in ("main", "alt", "sniper", "farmer"):
+                    errors.append("Account #{} role must be main, alt, sniper, or farmer.".format(idx))
+
+    raw_tokens_list = data.get("tokens")
+    if raw_tokens_list is not None:
+        if not isinstance(raw_tokens_list, (list, tuple)):
+            errors.append("tokens must be a list of Discord tokens.")
+        else:
+            if len(raw_tokens_list) > MAX_MULTI_ACCOUNTS:
+                errors.append("Maximum {} account tokens are supported.".format(MAX_MULTI_ACCOUNTS))
+            cleaned_tokens = [str(t or "").strip().strip("\"'") for t in raw_tokens_list if str(t or "").strip()]
+            if len(set(cleaned_tokens)) != len(cleaned_tokens):
+                errors.append("Duplicate account tokens are not allowed.")
+            token_values.extend(cleaned_tokens)
+
     if require_runtime and not any(str(item or "").strip() for item in token_values):
         errors.append("Discord token is required.")
     for key, label in (("prefix", "Bot command prefix"), ("mudae_prefix", "Mudae prefix"), ("roll_command", "Roll command")):
@@ -315,11 +426,15 @@ def validate_preset(data, resolved_token=None, require_runtime=True):
         "auto_us_limit", "auto_rolls_limit", "panic_roll_minutes", "auto_divorce_max_kakera",
         "max_claim_rank", "max_like_rank", "hybrid_panic_instant_claim_min_kakera",
         "hybrid_panic_instant_claim_max_rank", "oh_unknown_explore_clicks", "auto_dk_min_power",
-        "auto_give_kakera_threshold", "tower_max_floors", "wishlist_sync_interval_hours",
+        "auto_give_kakera_threshold", "auto_give_kakera_reserve", "auto_give_delay_seconds",
+        "multi_account_roll_stagger_seconds", "multi_account_alt_snipe_extra_delay",
+        "tower_max_floors", "wishlist_sync_interval_hours",
         "claim_chat_other_user_window_minutes", "claim_chat_probability", "claim_chat_min_delay",
         "claim_chat_max_delay", "claim_chat_min_kakera", "roll_speed_jitter_pct",
         "human_micro_pause_chance", "human_micro_pause_min", "human_micro_pause_max",
     ]
+    if data.get("main_cooldown_unknown_policy", "hold") not in ("hold", "allow"):
+        errors.append("main_cooldown_unknown_policy must be 'hold' or 'allow'.")
     for key in non_negative:
         if key in data and data[key] is not None:
             try:
